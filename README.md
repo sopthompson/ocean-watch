@@ -10,6 +10,10 @@ keys. Just open it or upload it anywhere that serves static files.
 ## What it does
 
 - **Sensors:** MODIS-Aqua (2002–), VIIRS NOAA-20 (2017–), PACE OCI (2024–), via NASA GIBS.
+- **More layers:** sea-surface temperature & anomaly (GHRSST/MUR), NOAA Coral Reef
+  Watch (SST, DHW, bleaching alerts), significant wave height (WaveWatch III,
+  2017–), and ocean depth / bathymetry (SRTM30+, static). Wave & depth layers are
+  ERDDAP WMS via PacIOOS — display + click-for-value, no in-browser averaging.
 - **Averaging:** single day, or weekly / monthly composites computed in the
   browser (per-pixel geometric mean of the cloud-free days), which fills gaps
   from clouds and missing passes.

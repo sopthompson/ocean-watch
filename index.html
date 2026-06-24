@@ -125,12 +125,12 @@
   </div>
 
   <label for="date" id="datelabel">Date</label>
-  <div class="daterow">
+  <div class="daterow" id="daterow">
     <button id="prev" title="Previous day">&#9664;</button>
     <input type="date" id="date">
     <button id="next" title="Next day">&#9654;</button>
   </div>
-  <div class="quickrow">
+  <div class="quickrow" id="quickrow">
     <button id="latest">Latest</button>
     <button id="elnino" title="Strong El Niño event">El Niño 2015</button>
     <button id="lanina" title="Strong La Niña event">La Niña 2021</button>
@@ -185,7 +185,7 @@
   <details class="credits">
     <summary>Credits &amp; methods</summary>
     <div class="credits-body">
-      <p><strong>Data sources.</strong> We acknowledge the use of imagery provided by NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS): chlorophyll-<em>a</em> (MODIS-Aqua, VIIRS NOAA-20/SNPP, PACE OCI; processed by the NASA Ocean Biology Processing Group, OB.DAAC) and GHRSST MUR sea-surface-temperature. Basemap, coastlines and labels: NASA GIBS. Coral Reef Watch products — SST, SST anomaly, Degree Heating Weeks and Bleaching Alert Area — from <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (5 km, 1985–present), served via the <a href="https://www.pacioos.hawaii.edu" target="_blank" rel="noopener">PacIOOS</a> ERDDAP.</p>
+      <p><strong>Data sources.</strong> We acknowledge the use of imagery provided by NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS): chlorophyll-<em>a</em> (MODIS-Aqua, VIIRS NOAA-20/SNPP, PACE OCI; processed by the NASA Ocean Biology Processing Group, OB.DAAC) and GHRSST MUR sea-surface-temperature. Basemap, coastlines and labels: NASA GIBS. Coral Reef Watch products — SST, SST anomaly, Degree Heating Weeks and Bleaching Alert Area — from <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (5 km, 1985–present). Significant wave height from the NOAA/NCEP <strong>WaveWatch III</strong> global model (2017–present, incl. short-range forecast); sea-floor depth from <strong>SRTM30+</strong> global bathymetry (Becker et al., ~1 km). Coral Reef Watch, WaveWatch III and SRTM30+ are served via the <a href="https://www.pacioos.hawaii.edu" target="_blank" rel="noopener">PacIOOS</a> ERDDAP.</p>
       <p><strong>Averaging &amp; differences.</strong> For NASA imagery layers, weekly/monthly averages and date-to-date differences are computed in your browser by decoding each pixel from the fixed colour scale — chlorophyll as a geometric mean / log-ratio, SST as a mean / °C difference. These are derived from colour-coded tiles, not source data values.</p>
       <p><strong>Trends.</strong> Clicking a point charts a time series there. Chlorophyll trends use gap-filled VIIRS Science-Quality Level-3 data (NOAA CoastWatch, 4 km); Coral Reef Watch trends use NOAA CRW gridded values (via PacIOOS); SST trends are sampled from the map tiles. The marker value reflects the displayed imagery at the selected date.</p>
       <p><strong>Limitations.</strong> Intended for visualization and education — not quantitative or navigational use. For research-grade values use <a href="https://giovanni.gsfc.nasa.gov" target="_blank" rel="noopener">NASA Giovanni</a>, <a href="https://oceancolor.gsfc.nasa.gov" target="_blank" rel="noopener">NASA Ocean Color</a>, or <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> directly.</p>
@@ -250,8 +250,10 @@ const CHL_L3 = { base: CWATCH, dataset: 'noaacwNPPVIIRSSQchlaWeekly', var: 'chlo
 const TILE = 512;
 
 // Every selectable layer. kind 'gibs' = NASA WMTS tiles (optionally decoded for
-// averaging/comparison via `palette`); kind 'erddap' = NOAA CRW WMS (display only).
-// compare: 'ratio' (log10 A/B, for chlorophyll), 'diff' (A−B °C, for SST), 'none'.
+// averaging/comparison via `palette`); kind 'erddap' = ERDDAP WMS via PacIOOS
+// (display + point values; no client-side averaging). erddap dimension shape is
+// inferred from flags: `static` = no time axis (bathymetry), `zLevel` = a depth
+// level to pin (waves). compare: 'ratio' (log10 A/B), 'diff' (A−B °C), 'none'.
 const LAYERS = {
   'chl-modis': { group: 'Chlorophyll-a', label: 'Chlorophyll — MODIS + SeaWiFS', kind: 'gibs', gibs: 'MODIS_Aqua_L2_Chlorophyll_A', chlTiles: true, start: '1997-09-04', legend: LEG + '/MODIS_Chlorophyll_H.svg', legendTitle: 'Chlorophyll-a (mg/m³) — log scale', unit: 'mg/m³', palette: CHL, log: true, avg: true, compare: 'ratio', diffK: Math.LN10, trend: 'tile', gappy: true, trendErddap: CHL_L3,
     cap: 'Chlorophyll-a (mg/m³, log). MODIS-Aqua 1 km from 2002; SeaWiFS ~4 km before — back to 1997. Cross-sensor differences carry extra uncertainty.' },
@@ -270,7 +272,11 @@ const LAYERS = {
   'crw-dhw': { group: 'Coral Reef Watch (NOAA)', label: 'Coral heat stress — DHW', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_DHW', start: '1985-04-01', legendTitle: 'Degree Heating Weeks (°C-weeks)', unit: '°C-wk', avg: false, compare: 'none', trend: 'erddap',
     cap: 'Degree Heating Weeks (°C-weeks): accumulated heat stress. ≥4 → bleaching likely, ≥8 → severe / mortality risk.' },
   'crw-baa': { group: 'Coral Reef Watch (NOAA)', label: 'Coral bleaching alert area', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_BAA', start: '1985-04-01', legendTitle: 'Bleaching Alert Area (0–4)', unit: 'level', avg: false, compare: 'none', trend: 'erddap',
-    cap: 'Bleaching Alert Area category: No Stress → Watch → Warning → Alert 1 → Alert 2.' }
+    cap: 'Bleaching Alert Area category: No Stress → Watch → Warning → Alert 1 → Alert 2.' },
+  'waves': { group: 'Waves', label: 'Significant wave height — WaveWatch III', kind: 'erddap', dataset: 'ww3_global_lon180', var: 'Thgt', zLevel: '0.0', start: '2017-01-01', legendTitle: 'Significant wave height (m)', unit: 'm', avg: false, compare: 'none', trend: 'erddap', cadence: 0.125, attr: 'WaveWatch III © NOAA/NCEP via PacIOOS',
+    cap: 'NOAA WaveWatch III significant wave height (m) — combined sea + swell, global ~0.5° model. 3-hourly, 2017–present (the last few days are forecast). Display + point values; averaging/difference not available.' },
+  'bathymetry': { group: 'Sea floor', label: 'Ocean depth — SRTM30+', kind: 'erddap', dataset: 'srtm30plus_v11_bathy', var: 'elev', static: true, start: '2017-01-01', legendTitle: 'Sea-floor elevation (m; negative = below sea level)', unit: 'm', dp: 0, avg: false, compare: 'none', trend: 'none', attr: 'SRTM30+ (Becker et al.) via PacIOOS',
+    cap: 'SRTM30+ global sea-floor elevation (m), ~1 km. Negative = depth below sea level; land clamps to the top of the scale. Static — date and averaging do not apply.' }
 };
 
 function latestDate() {
@@ -526,18 +532,20 @@ const PredictionLayer = L.GridLayer.extend({
   }
 });
 
-// ---- NOAA Coral Reef Watch (ERDDAP WMS, display only) ---------------------
+// ---- ERDDAP layers (WMS display + point values, via PacIOOS) --------------
 function erddapLayer(cfg, date) {
   const layer = L.tileLayer.wms(`${ERDDAP}/wms/${cfg.dataset}/request?`, {
     layers: `${cfg.dataset}:${cfg.var}`, styles: '', format: 'image/png',
     transparent: true, version: '1.1.1', tileSize: TILE, opacity: 0.9, zIndex: 10,
-    noWrap: true, attribution: 'CRW data © NOAA Coral Reef Watch via PacIOOS'
+    noWrap: true, attribution: cfg.attr || 'CRW data © NOAA Coral Reef Watch via PacIOOS'
   });
-  layer.setParams({ time: date }, true); // ERDDAP snaps to the nearest daily date
+  if (!cfg.static) layer.setParams({ time: date }, true); // ERDDAP snaps to the nearest time; static layers have no time axis
   return layer;
 }
+// griddap .png legend; dimension selector matches the dataset shape (time? z? lat lon).
 function erddapLegend(cfg) {
-  return `${ERDDAP}/griddap/${cfg.dataset}.png?${cfg.var}%5B(last)%5D%5B(0):(40)%5D%5B(-180):(180)%5D&.legend=Only`;
+  const sel = (cfg.static ? '' : '%5B(last)%5D') + (cfg.zLevel != null ? `%5B(${cfg.zLevel})%5D` : '') + '%5B(0):(40)%5D%5B(-180):(180)%5D';
+  return `${ERDDAP}/griddap/${cfg.dataset}.png?${cfg.var}${sel}&.legend=Only`;
 }
 
 // ---- Layer + UI orchestration ---------------------------------------------
@@ -560,6 +568,8 @@ const diffLeg   = document.getElementById('difflegend');
 const diffTicks = document.getElementById('diffticks');
 const legendCap = document.getElementById('legendcap');
 const dateLbl   = document.getElementById('datelabel');
+const dateRowEl = document.getElementById('daterow');
+const quickRowEl = document.getElementById('quickrow');
 const noteEl    = document.getElementById('note');
 const trendEl     = document.getElementById('trend');
 const trendHint   = document.getElementById('trend-hint');
@@ -583,7 +593,7 @@ const trendDatesEl = document.getElementById('trend-dates');
     for (const [id, cfg] of items) {
       const opt = document.createElement('option');
       opt.value = id;
-      opt.textContent = `${cfg.label} (${cfg.start.slice(0, 4)}–present)`;
+      opt.textContent = cfg.static ? cfg.label : `${cfg.label} (${cfg.start.slice(0, 4)}–present)`;
       og.appendChild(opt);
     }
     layerEl.appendChild(og);
@@ -684,6 +694,8 @@ function updateLabels() {
   const cd = parseInt(changeEl.value, 10) || 0;             // change-over-last-N-days (0 = off)
   const comparing = !compareDisabled && (compareEl.checked || cd > 0);
   avgWrap.style.display = (cfg.avg && !predicting) ? '' : 'none';
+  // Static layers (bathymetry) have no time axis — hide the date picker entirely.
+  dateLbl.style.display = dateRowEl.style.display = quickRowEl.style.display = cfg.static ? 'none' : '';
   changeWrap.style.display = compareDisabled ? 'none' : '';
   // The manual "compare with another date" controls hide while a Change window is active (they're mutually exclusive).
   compareRow.style.display = (!compareDisabled && cd === 0) ? '' : 'none';
@@ -905,7 +917,7 @@ function jsonpGet(url) {
 // or null for tile-sampled layers (SST).
 function seriesSource(cfg) {
   if (cfg.trendErddap) return cfg.trendErddap;                                  // chlorophyll → CoastWatch L3 (JSONP)
-  if (cfg.kind === 'erddap') return { base: ERDDAP, dataset: cfg.dataset, var: cfg.var, alt: false, jsonp: false, cadence: 1 }; // CRW → PacIOOS (fetch), daily grid
+  if (cfg.kind === 'erddap') return { base: ERDDAP, dataset: cfg.dataset, var: cfg.var, alt: !!cfg.zLevel, jsonp: false, cadence: cfg.cadence || 1, note: cfg.attr ? cfg.attr.split(' via ')[0] : '' }; // PacIOOS griddap (alt = pin depth level for waves)
   return null;
 }
 
@@ -980,7 +992,8 @@ function drawTrend(series, cfg, note) {
 // Value at a single date/point — for the marker's "current condition" label.
 async function fetchPointValue(cfg, date, lat, lng, span = 1) {
   if (cfg.kind === 'erddap') {
-    const r = await fetch(`${ERDDAP}/griddap/${cfg.dataset}.json?${cfg.var}%5B(${date})%5D%5B(${lat})%5D%5B(${lng})%5D`);
+    const sel = (cfg.static ? '' : `%5B(${date})%5D`) + (cfg.zLevel != null ? `%5B(${cfg.zLevel})%5D` : '') + `%5B(${lat})%5D%5B(${lng})%5D`;
+    const r = await fetch(`${ERDDAP}/griddap/${cfg.dataset}.json?${cfg.var}${sel}`);
     if (!r.ok) return null;
     const t = (await r.json()).table, vi = t.columnNames.indexOf(cfg.var);
     return t.rows.length ? t.rows[0][vi] : null;
@@ -1007,7 +1020,7 @@ function fmtPoint(cfg, v) {
     else if (v <= cfg.palette.min) { pre = '<'; v = cfg.palette.min; }
   }
   const sign = (!pre && /anomaly/i.test(cfg.legendTitle || '') && v >= 0) ? '+' : '';
-  const dp = cfg.unit === 'mg/m³' ? 2 : (cfg.unit === '°C' || cfg.unit === '°C-wk') ? 1 : 2;
+  const dp = cfg.dp != null ? cfg.dp : cfg.unit === 'mg/m³' ? 2 : (cfg.unit === '°C' || cfg.unit === '°C-wk') ? 1 : 2;
   return pre + sign + v.toFixed(dp) + (cfg.unit ? ' ' + cfg.unit : '');
 }
 // Marker label in compare mode: the A-vs-B change at the point.
@@ -1107,7 +1120,7 @@ async function showTrend() {
       seriesCache.set(sKey, series);
     }
     if (seq !== trendSeq) return; // a newer request superseded this one
-    const note = src ? (src.jsonp ? 'VIIRS L3 4 km · NOAA' : 'L3 data') : (cfg.gappy ? 'spatial + rolling avg' : '');
+    const note = src ? (src.jsonp ? 'VIIRS L3 4 km · NOAA' : (src.note || 'gridded data')) : (cfg.gappy ? 'spatial + rolling avg' : '');
     drawTrend(series, cfg, note);
   } catch (err) {
     if (seq === trendSeq) trendMeta.textContent = 'Trend data server unavailable — try again shortly.';
