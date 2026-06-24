@@ -276,8 +276,8 @@ const LAYERS = {
   'waves': { group: 'Waves', label: 'Significant wave height — WaveWatch III', kind: 'erddap', dataset: 'ww3_global_lon180', var: 'Thgt', zLevel: '0.0', pointDataset: 'ww3_global', pointLon360: true, start: '2017-01-01', legendTitle: 'Significant wave height (m)', unit: 'm', avg: false, compare: 'none', trend: 'erddap', cadence: 1 / 24, attr: 'WaveWatch III © NOAA/NCEP via PacIOOS',
     tileNote: 'WaveWatch map tiles are unavailable from PacIOOS right now — click any point to read wave height (works back to 2017).',
     cap: 'NOAA WaveWatch III significant wave height (m) — combined sea + swell, global 0.5° (~50 km) model, 77.5°S–77.5°N. Hourly, 2017–present (last few days are forecast). Map tiles come from PacIOOS and are sometimes offline; point values + trends always work. Averaging/difference not available.' },
-  'bathymetry': { group: 'Sea floor', label: 'Ocean depth — SRTM30+', kind: 'local', img: 'assets/bathymetry.png', data: 'assets/bathymetry-depth.png', legendImg: 'assets/bathymetry-legend.png', static: true, start: '2017-01-01', legendTitle: 'Sea-floor depth (m below sea level)', unit: 'm', dp: 0, avg: false, compare: 'none', trend: 'none', attr: 'SRTM30+ (Becker et al.), stored locally',
-    cap: 'SRTM30+ global sea-floor depth (m), stored locally as a ~0.2° (~22 km) grid — paints instantly with no server. Depths are approximate near coasts and islands; land is transparent. Static — date and averaging do not apply.' }
+  'bathymetry': { group: 'Sea floor', label: 'Ocean depth — SRTM30+', kind: 'local', img: 'assets/bathymetry.png', data: 'assets/bathymetry-depth.png', legendImg: 'assets/bathymetry-legend.png', wmsDataset: 'srtm30plus_v11_bathy', wmsVar: 'elev', wmsMinZoom: 5, static: true, start: '2017-01-01', legendTitle: 'Sea-floor elevation (m; negative = below sea level)', unit: 'm', dp: 0, avg: false, compare: 'none', trend: 'none', attr: 'SRTM30+ (Becker et al.) via PacIOOS',
+    cap: 'SRTM30+ global sea-floor elevation (m). Overview paints instantly from a stored ~0.2° image; zoom in (z5+) to load full ~1 km detail live from PacIOOS. Click any point for depth (from the local grid, ~0.1°). Land is transparent; static — date/averaging do not apply.' }
 };
 
 function latestDate() {
@@ -636,8 +636,19 @@ function updateLayer() {
   diffLeg.style.display = diffMode ? '' : 'none';
 
   if (cfg.kind === 'local') {
-    // Fully offline layer (bathymetry): one static colour image + a preloaded depth grid for clicks.
-    chlLayer = L.imageOverlay(cfg.img, [[-90, -180], [90, 180]], { opacity: 0.92, zIndex: 10, crossOrigin: 'anonymous' });
+    // Hybrid bathymetry: instant static overview always; live full-resolution WMS
+    // tiles overlaid only when zoomed in (z>=wmsMinZoom), where each tile is a small
+    // fast area. Depth clicks read the local grid. Same palette → seamless transition.
+    const overview = L.imageOverlay(cfg.img, [[-90, -180], [90, 180]], { opacity: 0.92, zIndex: 10, crossOrigin: 'anonymous' });
+    const parts = [overview];
+    if (cfg.wmsDataset) {
+      parts.push(L.tileLayer.wms(`${ERDDAP}/wms/${cfg.wmsDataset}/request?`, {
+        layers: `${cfg.wmsDataset}:${cfg.wmsVar}`, styles: '', format: 'image/png', transparent: true,
+        version: '1.1.1', tileSize: TILE, opacity: 0.92, zIndex: 11, noWrap: true,
+        minZoom: cfg.wmsMinZoom || 5  // below this the stored overview is enough; above it WMS adds full ~1km detail
+      }));
+    }
+    chlLayer = L.layerGroup(parts);
     loadBathy(cfg.data);
     legendImg.src = cfg.legendImg;
   } else if (cfg.kind === 'erddap') {
@@ -870,7 +881,7 @@ function bathyDepth(b, lat, lng) {
   const y = Math.min(b.h - 1, Math.max(0, Math.floor((90 - lat) / 180 * b.h)));
   const i = (y * b.w + x) * 4;
   if (b.d[i + 3] === 0) return null;            // land / no data
-  return b.d[i] * 256 + b.d[i + 1];             // metres below sea level (positive)
+  return -(b.d[i] * 256 + b.d[i + 1]);          // elevation: negative metres below sea level
 }
 // Pixel within the GIBS 4326 tile grid (512 px tiles, 0.5625°/px at z0).
 function lonLatToTile(lon, lat, z) {
