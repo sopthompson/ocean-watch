@@ -276,8 +276,8 @@ const LAYERS = {
   'waves': { group: 'Waves', label: 'Significant wave height — WaveWatch III', kind: 'erddap', dataset: 'ww3_global_lon180', var: 'Thgt', zLevel: '0.0', pointDataset: 'ww3_global', pointLon360: true, start: '2017-01-01', legendTitle: 'Significant wave height (m)', unit: 'm', avg: false, compare: 'none', trend: 'erddap', cadence: 1 / 24, attr: 'WaveWatch III © NOAA/NCEP via PacIOOS',
     tileNote: 'WaveWatch map tiles are unavailable from PacIOOS right now — click any point to read wave height (works back to 2017).',
     cap: 'NOAA WaveWatch III significant wave height (m) — combined sea + swell, global 0.5° (~50 km) model, 77.5°S–77.5°N. Hourly, 2017–present (last few days are forecast). Map tiles come from PacIOOS and are sometimes offline; point values + trends always work. Averaging/difference not available.' },
-  'bathymetry': { group: 'Sea floor', label: 'Ocean depth — SRTM30+', kind: 'local', img: 'assets/bathymetry.png', data: 'assets/bathymetry-depth.png', legendImg: 'assets/bathymetry-legend.png', wmsDataset: 'srtm30plus_v11_bathy', wmsVar: 'elev', wmsMinZoom: 5, static: true, start: '2017-01-01', legendTitle: 'Sea-floor elevation (m; negative = below sea level)', unit: 'm', dp: 0, avg: false, compare: 'none', trend: 'none', attr: 'SRTM30+ (Becker et al.) via PacIOOS',
-    cap: 'SRTM30+ global sea-floor elevation (m). Overview paints instantly from a stored ~0.2° image; zoom in (z5+) to load full ~1 km detail live from PacIOOS. Click any point for depth (from the local grid, ~0.1°). Land is transparent; static — date/averaging do not apply.' }
+  'bathymetry': { group: 'Sea floor', label: 'Ocean depth — SRTM30+', kind: 'local', img: 'assets/bathymetry.png', data: 'assets/bathymetry-depth.png', legendImg: 'assets/bathymetry-legend.png', wmsDataset: 'srtm30plus_v11_bathy', wmsVar: 'elev', wmsMinZoom: 6, static: true, start: '2017-01-01', legendTitle: 'Sea-floor elevation (m; negative = below sea level)', unit: 'm', dp: 0, avg: false, compare: 'none', trend: 'none', attr: 'SRTM30+ (Becker et al.) via PacIOOS',
+    cap: 'SRTM30+ global sea-floor elevation (m). Overview paints instantly from a stored ~0.2° image; zoom in (z6+) and the full ~1 km detail for the view loads from PacIOOS (a few seconds). Click any point for depth (local grid, ~0.1°). Land is transparent; static — date/averaging do not apply.' }
 };
 
 function latestDate() {
@@ -621,6 +621,7 @@ function diffState(cfg) {
 
 function updateLayer() {
   if (chlLayer) map.removeLayer(chlLayer);
+  clearDetail();
   statusEl.textContent = '';
   const cfg = layerCfg();
   const date = dateEl.value;
@@ -636,21 +637,14 @@ function updateLayer() {
   diffLeg.style.display = diffMode ? '' : 'none';
 
   if (cfg.kind === 'local') {
-    // Hybrid bathymetry: instant static overview always; live full-resolution WMS
-    // tiles overlaid only when zoomed in (z>=wmsMinZoom), where each tile is a small
-    // fast area. Depth clicks read the local grid. Same palette → seamless transition.
-    const overview = L.imageOverlay(cfg.img, [[-90, -180], [90, 180]], { opacity: 0.92, zIndex: 10, crossOrigin: 'anonymous' });
-    const parts = [overview];
-    if (cfg.wmsDataset) {
-      parts.push(L.tileLayer.wms(`${ERDDAP}/wms/${cfg.wmsDataset}/request?`, {
-        layers: `${cfg.wmsDataset}:${cfg.wmsVar}`, styles: '', format: 'image/png', transparent: true,
-        version: '1.1.1', tileSize: TILE, opacity: 0.92, zIndex: 11, noWrap: true,
-        minZoom: cfg.wmsMinZoom || 5  // below this the stored overview is enough; above it WMS adds full ~1km detail
-      }));
-    }
-    chlLayer = L.layerGroup(parts);
+    // Hybrid bathymetry: instant static overview always; one live full-resolution
+    // image for the current viewport when zoomed in (z>=wmsMinZoom). A single
+    // request per view (not tiles) avoids PacIOOS rate-limiting bursts. Same
+    // palette → seamless. Depth clicks read the local grid.
+    chlLayer = L.imageOverlay(cfg.img, [[-90, -180], [90, 180]], { opacity: 0.92, zIndex: 10, crossOrigin: 'anonymous' });
     loadBathy(cfg.data);
     legendImg.src = cfg.legendImg;
+    updateDetail(cfg);
   } else if (cfg.kind === 'erddap') {
     chlLayer = erddapLayer(cfg, date); // CRW can't be repainted client-side; map stays at anchor date
     statusEl.textContent = `Loading ${cfg.label}…`;
@@ -697,6 +691,43 @@ function updateLayer() {
   updateLabels();
   scheduleTrend();
 }
+
+// ---- Live full-resolution detail for the offline bathymetry layer ----------
+// When zoomed in (z>=wmsMinZoom), fetch ONE transparentPng for the current
+// viewport (a single request — avoids PacIOOS rate-limiting that hits tile
+// bursts) and overlay it above the stored overview. Refreshes on pan/zoom.
+let detailLayer = null, detailTimer = null, detailSeq = 0;
+function clearDetail() {
+  if (detailLayer) { map.removeLayer(detailLayer); detailLayer = null; }
+  if (detailTimer) { clearTimeout(detailTimer); detailTimer = null; }
+  detailSeq++;
+}
+function updateDetail(cfg) {
+  cfg = cfg || layerCfg();
+  if (!cfg || cfg.kind !== 'local' || !cfg.wmsDataset || map.getZoom() < (cfg.wmsMinZoom || 6)) { clearDetail(); return; }
+  clearTimeout(detailTimer);
+  detailTimer = setTimeout(() => {
+    const b = map.getBounds();
+    const s = Math.max(-89.9, b.getSouth()), n = Math.min(89.9, b.getNorth());
+    const w = Math.max(-180, b.getWest()), e = Math.min(180, b.getEast());
+    if (n <= s || e <= w) return;
+    // cap render cost to ~1024 px on the long side (still ~native near full zoom)
+    const stride = Math.max(1, Math.round(Math.max((e - w), (n - s)) / 0.00833 / 1024));
+    const seq = ++detailSeq;
+    const url = `${ERDDAP}/griddap/${cfg.wmsDataset}.transparentPng?${cfg.wmsVar}%5B(${s}):${stride}:(${n})%5D%5B(${w}):${stride}:(${e})%5D&.draw=surface`;
+    statusEl.textContent = 'Loading full-resolution depth…';
+    const layer = L.imageOverlay(url, [[s, w], [n, e]], { opacity: 0.92, zIndex: 11, crossOrigin: 'anonymous' });
+    layer.on('load', () => {
+      if (seq !== detailSeq) { map.removeLayer(layer); return; }
+      const old = detailLayer; detailLayer = layer;
+      if (old) map.removeLayer(old);
+      statusEl.textContent = '';
+    });
+    layer.on('error', () => { map.removeLayer(layer); if (seq === detailSeq) statusEl.textContent = ''; });
+    layer.addTo(map);
+  }, 400);
+}
+map.on('moveend zoomend', () => { (layerCfg().kind === 'local') ? updateDetail() : clearDetail(); });
 
 function updateLabels() {
   const cfg = layerCfg();
