@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ocean Chlorophyll-a — NASA Ocean Color</title>
+<meta name="description" content="Daily, weekly, and monthly averaged ocean chlorophyll-a worldwide from NASA ocean-color satellites. Compare any two dates as a difference map.">
+<link rel="canonical" href="https://oceanchlorophyll.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://oceanchlorophyll.com/">
+<meta property="og:title" content="Ocean Chlorophyll-a — worldwide satellite map">
+<meta property="og:description" content="Explore daily, weekly and monthly ocean chlorophyll-a worldwide from NASA satellites, and compare any two dates as a difference map.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Ocean Chlorophyll-a — worldwide satellite map">
+<meta name="twitter:description" content="Daily, weekly and monthly ocean chlorophyll-a worldwide from NASA satellites, with date-to-date difference maps.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<style>
+  html, body { height: 100%; margin: 0; font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  #map { height: 100%; background: #04132b; }
+  /* Off-screen but crawlable / accessible — gives search engines real text. */
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+  .panel {
+    position: absolute; top: 12px; right: 12px; z-index: 1000;
+    background: rgba(13, 22, 38, 0.92); color: #e8eef7;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+    padding: 14px 16px; width: 320px; box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    max-height: calc(100vh - 24px); overflow-y: auto;
+  }
+  .panel h1 { font-size: 15px; margin: 0 0 2px; }
+  .panel .sub { font-size: 11px; color: #9fb0c8; margin-bottom: 12px; }
+  .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .panel-head .sub { margin-bottom: 0; }
+  #toggle { flex: 0 0 auto; padding: 3px 9px; font-size: 13px; line-height: 1.3; background: #24385c; border: 1px solid #31436a; border-radius: 6px; color: #e8eef7; cursor: pointer; }
+  .panel.collapsed { overflow: visible; }
+  .panel.collapsed #panel-body { display: none; }
+  @media (max-width: 600px) {
+    .panel { top: 8px; left: 8px; right: 8px; width: auto; max-height: 72vh; padding: 10px 12px; }
+    .panel.collapsed { max-height: none; }
+  }
+  .panel label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #9fb0c8; margin: 10px 0 4px; }
+  .panel select, .panel input[type=date] {
+    width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px;
+    background: #182740; color: #e8eef7; border: 1px solid #31436a; border-radius: 6px;
+    color-scheme: dark;
+  }
+  .daterow { display: flex; gap: 6px; align-items: center; }
+  .daterow input { flex: 1; }
+  .panel button {
+    padding: 6px 10px; font-size: 13px; cursor: pointer;
+    background: #24385c; color: #e8eef7; border: 1px solid #31436a; border-radius: 6px;
+  }
+  .panel button:hover { background: #2f4977; }
+  .quickrow { display: flex; gap: 6px; margin-top: 8px; }
+  .quickrow button { flex: 1; font-size: 12px; }
+  .legend { margin-top: 14px; }
+  .legend img { width: 100%; display: block; border-radius: 4px; background: #fff; padding: 4px 2px; box-sizing: border-box; }
+  .legend .cap { font-size: 11px; color: #9fb0c8; margin-top: 4px; }
+  .checkrow { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; color: #e8eef7; cursor: pointer; }
+  .checkrow input { width: auto; margin: 0; }
+  .diffbar { height: 14px; border-radius: 4px; background: linear-gradient(to right, rgb(33,102,172), #f4f4f4 50%, rgb(178,24,43)); }
+  .diffticks { display: flex; justify-content: space-between; font-size: 10px; color: #9fb0c8; margin-top: 2px; }
+  .trend-hint { margin-top: 12px; font-size: 11px; color: #7d8ca3; font-style: italic; }
+  .trend { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 10px; }
+  .trend-head { display: flex; align-items: center; justify-content: space-between; }
+  #trend-title { font-size: 12px; color: #e8eef7; }
+  #trend-close { background: none; border: none; color: #9fb0c8; font-size: 17px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  #trend-canvas { width: 100%; height: auto; background: #0d1626; border: 1px solid #24385c; border-radius: 6px; margin-top: 6px; display: block; }
+  .trend-meta { font-size: 11px; color: #9fb0c8; margin: 5px 0; min-height: 14px; }
+  .trend-dates { display: flex; gap: 8px; }
+  .trend-dates label { flex: 1; text-transform: none; letter-spacing: 0; font-size: 11px; color: #9fb0c8; margin: 6px 0 0; }
+  .trend-dates input { margin-top: 3px; }
+  .pt-tip { background: #0d1626; color: #e8eef7; border: 1px solid #31436a; border-radius: 5px; font-size: 12px; font-weight: 600; padding: 2px 7px; box-shadow: 0 1px 6px rgba(0,0,0,0.5); white-space: nowrap; }
+  .pt-tip::before { display: none; }
+  .note { font-size: 11px; color: #8294ad; margin-top: 10px; line-height: 1.45; }
+  .note a { color: #7db3ff; }
+  .credits { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 8px; }
+  .credits summary { cursor: pointer; font-size: 11px; color: #9fb0c8; user-select: none; }
+  .credits-body { font-size: 11px; color: #8294ad; }
+  .credits-body p { margin: 8px 0; line-height: 1.5; }
+  .credits-body a { color: #7db3ff; }
+  #status { font-size: 11px; margin-top: 8px; min-height: 14px; color: #ffd479; }
+</style>
+</head>
+<body>
+<div class="sr-only">
+  <h1>Ocean Chlorophyll-a — worldwide satellite map</h1>
+  <p>An interactive world map of ocean chlorophyll-a (phytoplankton) concentration
+  from NASA ocean-color satellites — MODIS Aqua, VIIRS and PACE. View any day from
+  2002 to the present, build weekly or monthly cloud-free averages, and compare two
+  dates side by side as a difference map. Useful for exploring phytoplankton blooms,
+  ocean productivity, upwelling, and El Niño / La Niña effects on the ocean.</p>
+</div>
+<div id="map"></div>
+
+<div class="panel" id="panel">
+  <div class="panel-head">
+    <div class="panel-title">
+      <h1>Ocean Data Explorer</h1>
+      <div class="sub">Worldwide &middot; NASA &amp; NOAA ocean satellites</div>
+    </div>
+    <button id="toggle" type="button" aria-label="Show or hide controls" aria-expanded="true">&#9650;</button>
+  </div>
+  <div id="panel-body">
+
+  <label for="layer">Layer</label>
+  <select id="layer"></select>
+
+  <div id="avg-controls">
+    <label for="avg">Averaging</label>
+    <select id="avg">
+      <option value="1">Single day</option>
+      <option value="7">Weekly average (7 days)</option>
+      <option value="30">Monthly average (30 days)</option>
+    </select>
+  </div>
+
+  <div id="change-controls">
+    <label for="change">Change</label>
+    <select id="change">
+      <option value="0">Off</option>
+      <option value="7">Change over last 7 days</option>
+      <option value="30">Change over last 30 days</option>
+    </select>
+  </div>
+
+  <label for="date" id="datelabel">Date</label>
+  <div class="daterow">
+    <button id="prev" title="Previous day">&#9664;</button>
+    <input type="date" id="date">
+    <button id="next" title="Next day">&#9654;</button>
+  </div>
+  <div class="quickrow">
+    <button id="latest">Latest</button>
+    <button id="elnino" title="Strong El Niño event">El Niño 2015</button>
+    <button id="lanina" title="Strong La Niña event">La Niña 2021</button>
+  </div>
+
+  <label class="checkrow" id="compare-row"><input type="checkbox" id="compare"> Compare with another date (difference)</label>
+  <div id="compare-controls" style="display:none">
+    <label for="dateB">Reference date (B)</label>
+    <div class="daterow">
+      <button id="prevB" title="Previous day">&#9664;</button>
+      <input type="date" id="dateB">
+      <button id="nextB" title="Next day">&#9654;</button>
+    </div>
+  </div>
+
+  <label class="checkrow" id="predict-row" style="display:none"><input type="checkbox" id="predict"> Prediction (analog year)</label>
+  <div id="predict-controls" style="display:none">
+    <label for="analog-year">If conditions evolve like…</label>
+    <select id="analog-year"></select>
+    <label for="predict-date">…show conditions on (target date)</label>
+    <div class="daterow"><input type="date" id="predict-date"></div>
+  </div>
+  <div id="status"></div>
+
+  <div class="legend">
+    <label id="legendlabel"></label>
+    <img id="legendimg" src="" alt="Color scale">
+    <div id="difflegend" style="display:none">
+      <div class="diffbar"></div>
+      <div class="diffticks" id="diffticks"></div>
+    </div>
+    <div class="cap" id="legendcap"></div>
+  </div>
+
+  <label class="checkrow" id="trend-on-row"><input type="checkbox" id="trend-on"> Show trend chart on click</label>
+  <div id="trend-hint" class="trend-hint">Click anywhere on the map to read the value at that point.</div>
+  <div id="trend" class="trend" style="display:none">
+    <div class="trend-head">
+      <span id="trend-title">Trend</span>
+      <button id="trend-close" type="button" title="Hide trend">&times;</button>
+    </div>
+    <canvas id="trend-canvas" width="288" height="130"></canvas>
+    <div class="trend-meta" id="trend-meta"></div>
+    <div class="trend-dates" id="trend-dates">
+      <label for="trend-start">From<input type="date" id="trend-start"></label>
+      <label for="trend-end">To<input type="date" id="trend-end"></label>
+    </div>
+  </div>
+
+  <div class="note" id="note"></div>
+
+  <details class="credits">
+    <summary>Credits &amp; methods</summary>
+    <div class="credits-body">
+      <p><strong>Data sources.</strong> We acknowledge the use of imagery provided by NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS): chlorophyll-<em>a</em> (MODIS-Aqua, VIIRS NOAA-20/SNPP, PACE OCI; processed by the NASA Ocean Biology Processing Group, OB.DAAC) and GHRSST MUR sea-surface-temperature. Basemap, coastlines and labels: NASA GIBS. Coral Reef Watch products — SST, SST anomaly, Degree Heating Weeks and Bleaching Alert Area — from <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (5 km, 1985–present), served via the <a href="https://www.pacioos.hawaii.edu" target="_blank" rel="noopener">PacIOOS</a> ERDDAP.</p>
+      <p><strong>Averaging &amp; differences.</strong> For NASA imagery layers, weekly/monthly averages and date-to-date differences are computed in your browser by decoding each pixel from the fixed colour scale — chlorophyll as a geometric mean / log-ratio, SST as a mean / °C difference. These are derived from colour-coded tiles, not source data values.</p>
+      <p><strong>Trends.</strong> Clicking a point charts a time series there. Chlorophyll trends use gap-filled VIIRS Science-Quality Level-3 data (NOAA CoastWatch, 4 km); Coral Reef Watch trends use NOAA CRW gridded values (via PacIOOS); SST trends are sampled from the map tiles. The marker value reflects the displayed imagery at the selected date.</p>
+      <p><strong>Limitations.</strong> Intended for visualization and education — not quantitative or navigational use. For research-grade values use <a href="https://giovanni.gsfc.nasa.gov" target="_blank" rel="noopener">NASA Giovanni</a>, <a href="https://oceancolor.gsfc.nasa.gov" target="_blank" rel="noopener">NASA Ocean Color</a>, or <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> directly.</p>
+      <p>Map library: <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>. This site is not affiliated with or endorsed by NASA, NOAA, or PacIOOS.</p>
+    </div>
+  </details>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+// NASA GIBS "MODIS_Chlorophyll" palette: [r, g, b, value(mg/m3)] on a log scale 0.01–20.
+const PALETTE=[[144,0,111,0.01],[141,0,114,0.0103],[138,0,117,0.0106],[135,0,120,0.0109],[132,0,123,0.0113],[129,0,126,0.0116],[126,0,129,0.012],[123,0,132,0.0123],[120,0,135,0.0127],[117,0,138,0.0131],[114,0,141,0.0135],[111,0,144,0.0139],[108,0,147,0.0143],[105,0,150,0.0148],[102,0,153,0.0152],[99,0,156,0.0157],[96,0,159,0.0162],[93,0,162,0.0167],[90,0,165,0.0172],[87,0,168,0.0177],[84,0,171,0.0182],[81,0,174,0.0188],[78,0,177,0.0194],[75,0,180,0.02],[72,0,183,0.0206],[69,0,186,0.0212],[66,0,189,0.0218],[63,0,192,0.0225],[60,0,195,0.0232],[57,0,198,0.0239],[54,0,201,0.0246],[51,0,204,0.0254],[48,0,207,0.0262],[45,0,210,0.027],[42,0,213,0.0278],[39,0,216,0.0286],[36,0,219,0.0295],[33,0,222,0.0304],[30,0,225,0.0313],[27,0,228,0.0323],[24,0,231,0.0333],[21,0,234,0.0343],[18,0,237,0.0353],[15,0,240,0.0364],[12,0,243,0.0375],[9,0,246,0.0386],[6,0,249,0.0398],[0,0,252,0.041],[0,0,255,0.0423],[0,5,255,0.0436],[0,10,255,0.0449],[0,16,255,0.0463],[0,21,255,0.0477],[0,26,255,0.0491],[0,32,255,0.0506],[0,37,255,0.0522],[0,42,255,0.0538],[0,48,255,0.0554],[0,53,255,0.0571],[0,58,255,0.0589],[0,64,255,0.0607],[0,69,255,0.0625],[0,74,255,0.0644],[0,80,255,0.0664],[0,85,255,0.0684],[0,90,255,0.0705],[0,96,255,0.0726],[0,101,255,0.0748],[0,106,255,0.0771],[0,112,255,0.0795],[0,117,255,0.0819],[0,122,255,0.0844],[0,128,255,0.087],[0,133,255,0.0896],[0,138,255,0.0924],[0,144,255,0.0952],[0,149,255,0.098],[0,154,255,0.101],[0,160,255,0.104],[0,165,255,0.107],[0,170,255,0.111],[0,176,255,0.114],[0,181,255,0.117],[0,186,255,0.121],[0,192,255,0.125],[0,197,255,0.129],[0,202,255,0.132],[0,208,255,0.137],[0,213,255,0.141],[0,218,255,0.145],[0,224,255,0.149],[0,229,255,0.154],[0,234,255,0.159],[0,240,255,0.163],[0,245,255,0.168],[0,250,255,0.174],[0,255,255,0.179],[0,255,247,0.184],[0,255,239,0.19],[0,255,231,0.196],[0,255,223,0.202],[0,255,215,0.208],[0,255,207,0.214],[0,255,199,0.221],[0,255,191,0.227],[0,255,183,0.234],[0,255,175,0.242],[0,255,167,0.249],[0,255,159,0.257],[0,255,151,0.264],[0,255,143,0.272],[0,255,135,0.281],[0,255,127,0.289],[0,255,119,0.298],[0,255,111,0.307],[0,255,103,0.317],[0,255,95,0.326],[0,255,87,0.336],[0,255,79,0.346],[0,255,71,0.357],[0,255,63,0.368],[0,255,55,0.379],[0,255,47,0.391],[0,255,39,0.403],[0,255,31,0.415],[0,255,23,0.428],[0,255,15,0.441],[0,255,0,0.454],[8,255,0,0.468],[16,255,0,0.482],[24,255,0,0.497],[32,255,0,0.512],[40,255,0,0.528],[48,255,0,0.544],[56,255,0,0.56],[64,255,0,0.577],[72,255,0,0.595],[80,255,0,0.613],[88,255,0,0.632],[96,255,0,0.651],[104,255,0,0.671],[112,255,0,0.691],[120,255,0,0.712],[128,255,0,0.734],[136,255,0,0.757],[144,255,0,0.78],[152,255,0,0.803],[160,255,0,0.828],[168,255,0,0.853],[176,255,0,0.879],[184,255,0,0.906],[192,255,0,0.934],[200,255,0,0.962],[208,255,0,0.991],[216,255,0,1.022],[224,255,0,1.053],[232,255,0,1.085],[240,255,0,1.118],[248,255,0,1.152],[255,255,0,1.187],[255,251,0,1.224],[255,247,0,1.261],[255,243,0,1.299],[255,239,0,1.339],[255,235,0,1.38],[255,231,0,1.422],[255,227,0,1.465],[255,223,0,1.51],[255,219,0,1.556],[255,215,0,1.603],[255,211,0,1.652],[255,207,0,1.703],[255,203,0,1.755],[255,199,0,1.808],[255,195,0,1.863],[255,191,0,1.92],[255,187,0,1.979],[255,183,0,2.039],[255,179,0,2.101],[255,175,0,2.165],[255,171,0,2.231],[255,167,0,2.299],[255,163,0,2.369],[255,159,0,2.442],[255,155,0,2.516],[255,151,0,2.593],[255,147,0,2.672],[255,143,0,2.754],[255,139,0,2.838],[255,135,0,2.924],[255,131,0,3.013],[255,127,0,3.105],[255,123,0,3.2],[255,119,0,3.297],[255,115,0,3.398],[255,111,0,3.502],[255,107,0,3.608],[255,103,0,3.718],[255,99,0,3.832],[255,95,0,3.949],[255,91,0,4.069],[255,87,0,4.193],[255,83,0,4.321],[255,79,0,4.453],[255,75,0,4.589],[255,71,0,4.729],[255,67,0,4.873],[255,63,0,5.022],[255,59,0,5.175],[255,55,0,5.333],[255,51,0,5.495],[255,47,0,5.663],[255,43,0,5.836],[255,39,0,6.014],[255,35,0,6.197],[255,31,0,6.386],[255,27,0,6.581],[255,23,0,6.781],[255,19,0,6.988],[255,15,0,7.201],[255,11,0,7.421],[255,7,0,7.647],[255,3,0,7.881],[255,0,0,8.121],[250,0,0,8.369],[245,0,0,8.624],[240,0,0,8.887],[235,0,0,9.158],[230,0,0,9.437],[225,0,0,9.725],[220,0,0,10.022],[215,0,0,10.327],[210,0,0,10.642],[205,0,0,10.967],[200,0,0,11.301],[195,0,0,11.646],[190,0,0,12.001],[185,0,0,12.367],[180,0,0,12.744],[175,0,0,13.133],[170,0,0,13.534],[165,0,0,13.946],[160,0,0,14.372],[155,0,0,14.81],[150,0,0,15.262],[145,0,0,15.727],[140,0,0,16.207],[135,0,0,16.701],[130,0,0,17.21],[125,0,0,17.735],[120,0,0,18.276],[115,0,0,18.834],[110,0,0,19.408],[105,0,0,20]];
+
+// NASA GHRSST sea-surface-temperature palette: [r, g, b, value(°C)] linear 0–32.
+const SST_PALETTE=[[45,0,28,0],[48,0,31,0.15],[51,0,34,0.3],[53,0,36,0.45],[56,0,39,0.6],[59,0,43,0.75],[63,1,46,0.9],[66,1,50,1.05],[69,1,53,1.2],[72,1,57,1.35],[75,2,61,1.5],[78,2,65,1.65],[81,2,69,1.8],[85,2,73,1.95],[88,2,77,2.1],[91,3,81,2.25],[95,3,85,2.4],[98,3,89,2.55],[101,3,93,2.7],[105,4,97,2.85],[108,4,102,3],[112,5,106,3.15],[115,5,110,3.3],[118,6,113,3.45],[120,6,115,3.6],[121,6,117,3.75],[122,6,119,3.9],[121,6,119,4.05],[120,7,119,4.2],[117,7,117,4.35],[114,7,116,4.5],[111,7,114,4.65],[107,8,112,4.8],[103,8,110,4.95],[98,8,108,5.1],[94,8,105,5.25],[90,9,103,5.4],[86,9,101,5.55],[81,9,99,5.7],[77,9,97,5.85],[73,10,94,6],[69,10,92,6.15],[65,10,90,6.3],[61,10,88,6.45],[57,10,86,6.6],[53,11,84,6.75],[48,11,81,6.9],[44,11,79,7.05],[40,11,77,7.2],[37,12,76,7.35],[34,13,75,7.5],[32,14,75,7.65],[30,16,77,7.8],[30,18,78,7.95],[30,20,81,8.1],[30,22,84,8.25],[30,24,87,8.4],[30,26,90,8.55],[31,28,93,8.7],[30,30,96,8.85],[30,33,99,9],[31,35,102,9.15],[31,37,105,9.3],[31,39,108,9.45],[31,42,112,9.6],[31,44,115,9.75],[31,46,118,9.9],[31,48,121,10.05],[31,50,124,10.2],[31,53,127,10.35],[31,55,130,10.5],[32,57,133,10.65],[32,59,136,10.8],[32,61,139,10.95],[32,64,142,11.1],[32,66,145,11.25],[32,68,148,11.4],[32,70,151,11.55],[33,73,155,11.7],[33,75,158,11.85],[33,78,161,12],[33,81,164,12.15],[34,84,167,12.3],[34,87,170,12.45],[35,90,173,12.6],[35,93,176,12.75],[36,96,179,12.9],[36,100,182,13.05],[37,103,185,13.2],[37,106,187,13.35],[38,110,190,13.5],[38,113,194,13.65],[39,117,197,13.8],[40,120,200,13.95],[40,123,203,14.1],[41,127,206,14.25],[41,130,209,14.4],[42,133,212,14.55],[42,136,215,14.7],[42,139,218,14.85],[43,142,221,15],[43,146,224,15.15],[44,149,227,15.3],[44,152,230,15.45],[45,156,233,15.6],[46,159,236,15.75],[46,163,239,15.9],[47,166,242,16.05],[48,170,245,16.2],[48,172,244,16.35],[47,173,240,16.5],[46,174,232,16.65],[45,174,222,16.8],[43,173,208,16.95],[41,171,191,17.1],[39,168,171,17.25],[37,166,152,17.4],[35,164,133,17.55],[32,163,113,17.7],[30,163,93,17.85],[27,165,72,18],[25,167,53,18.15],[26,170,37,18.3],[28,175,23,18.45],[32,179,13,18.6],[38,183,6,18.75],[45,187,1,18.9],[55,190,0,19.05],[66,194,0,19.2],[76,197,0,19.35],[87,201,0,19.5],[98,204,0,19.65],[109,207,0,19.8],[120,211,0,19.95],[131,215,0,20.1],[142,218,0,20.25],[153,222,0,20.4],[165,225,0,20.55],[176,229,0,20.7],[187,232,0,20.85],[197,236,0,21],[208,239,0,21.15],[219,243,0,21.3],[229,246,0,21.45],[237,247,0,21.6],[243,247,0,21.75],[248,245,0,21.9],[252,243,0,22.05],[254,239,0,22.2],[255,234,0,22.35],[255,228,0,22.5],[255,223,0,22.65],[255,217,0,22.8],[255,212,0,22.95],[255,206,0,23.1],[255,201,0,23.25],[255,196,0,23.4],[255,191,0,23.55],[255,185,0,23.7],[255,180,0,23.85],[255,175,0,24],[255,170,0,24.15],[255,164,0,24.3],[255,159,0,24.45],[255,153,0,24.6],[255,148,0,24.75],[255,142,0,24.9],[255,137,0,25.05],[255,131,0,25.2],[254,126,0,25.35],[253,122,0,25.5],[252,117,0,25.65],[251,113,0,25.8],[250,109,0,25.95],[248,106,0,26.1],[246,102,0,26.25],[244,98,0,26.4],[242,95,0,26.55],[240,91,0,26.7],[238,87,0,26.85],[236,83,0,27],[234,80,0,27.15],[232,76,0,27.3],[230,73,0,27.45],[228,69,0,27.6],[226,66,0,27.75],[224,62,0,27.9],[222,59,0,28.05],[220,55,0,28.2],[218,51,0,28.35],[216,48,0,28.5],[213,45,0,28.65],[210,42,0,28.8],[206,39,0,28.95],[202,37,0,29.1],[197,34,0,29.25],[192,32,0,29.4],[187,31,0,29.55],[181,29,0,29.7],[176,27,0,29.85],[171,25,0,30],[166,23,0,30.15],[161,21,0,30.3],[156,20,0,30.45],[151,18,0,30.6],[145,16,0,30.75],[140,14,0,30.9],[135,12,0,31.05],[130,10,0,31.2],[124,8,0,31.35],[120,7,0,31.5],[115,5,0,31.65],[110,3,0,31.8],[107,2,0,32]];
+
+// Turn an [r,g,b,value] palette into fast decode (exact RGB->value) and
+// encode (value->nearest color) helpers.
+function makePalette(arr) {
+  const dec = new Map(), vals = [], cols = [];
+  for (const [r, g, b, v] of arr) {
+    const key = (r << 16) | (g << 8) | b;
+    if (!dec.has(key)) dec.set(key, v);
+    vals.push(v); cols.push([r, g, b]);
+  }
+  return {
+    min: vals[0], max: vals[vals.length - 1], // scale endpoints (values beyond these saturate)
+    decode(r, g, b) { const v = dec.get((r << 16) | (g << 8) | b); return v === undefined ? null : v; },
+    encode(v) {
+      if (v <= vals[0]) return cols[0];
+      if (v >= vals[vals.length - 1]) return cols[cols.length - 1];
+      let lo = 0, hi = vals.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] < v) lo = m + 1; else hi = m; }
+      if (lo > 0 && Math.abs(vals[lo - 1] - v) < Math.abs(vals[lo] - v)) return cols[lo - 1];
+      return cols[lo];
+    }
+  };
+}
+const CHL = makePalette(PALETTE);
+const SST = makePalette(SST_PALETTE);
+// NASA GHRSST SST-anomaly palette: [r, g, b, value(°C)] diverging −3…+3.
+const SSTANOM_PALETTE=[[116,0,214,-3],[127,0,211,-2.9],[137,0,207,-2.8],[150,0,202,-2.7],[145,9,204,-2.6],[127,26,209,-2.5],[96,49,220,-2.4],[65,75,230,-2.3],[34,100,241,-2.2],[8,124,251,-2.1],[0,148,255,-2],[0,174,255,-1.9],[0,202,255,-1.8],[0,227,255,-1.7],[3,248,250,-1.6],[24,252,229,-1.5],[47,255,206,-1.4],[71,255,182,-1.3],[96,255,158,-1.2],[118,255,140,-1.1],[136,255,132,-1],[151,255,139,-0.9],[164,255,145,-0.8],[177,255,152,-0.7],[189,254,158,-0.6],[191,244,163,-0.5],[191,232,169,-0.4],[191,219,176,-0.3],[191,208,182,-0.2],[194,202,184,-0.1],[202,202,183,0],[213,213,172,0.1],[226,226,162,0.2],[237,237,152,0.3],[249,248,141,0.4],[255,246,121,0.5],[255,234,94,0.6],[255,222,67,0.7],[255,208,37,0.8],[255,194,9,0.9],[255,182,1,1],[255,170,0,1.1],[255,157,0,1.2],[255,145,0,1.3],[255,130,0,1.4],[255,113,0,1.5],[255,89,0,1.6],[255,61,0,1.7],[255,33,0,1.8],[254,9,0,1.9],[249,1,19,2],[243,0,45,2.1],[236,0,74,2.2],[230,0,103,2.3],[222,0,125,2.4],[211,0,133,2.5],[191,0,104,2.6],[171,0,72,2.7],[154,0,44,2.8],[136,0,15,2.9],[128,0,0,3]];
+const SSTANOM = makePalette(SSTANOM_PALETTE);
+
+// Geographic CRS matching the GIBS EPSG:4326 WMTS grid: 512 px tiles,
+// 0.5625°/px at zoom 0 (origin top-left at -180, 90), so scale(0)=320 and
+// Leaflet zoom == GIBS TileMatrix level. Verified against live GIBS tiles.
+const GIBS4326 = L.extend({}, L.CRS.EPSG4326, {
+  transformation: new L.Transformation(1 / 180, 1, -1 / 180, 0.5),
+  scale: function (zoom) { return 320 * Math.pow(2, zoom); },
+  zoom: function (scale) { return Math.log(scale / 320) / Math.LN2; }
+});
+
+const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best';
+const LEG = 'https://gibs.earthdata.nasa.gov/legends';
+const ERDDAP = 'https://pae-paha.pacioos.hawaii.edu/erddap'; // NOAA Coral Reef Watch via PacIOOS (CORS ok)
+const CWATCH = 'https://coastwatch.noaa.gov/erddap';        // NOAA CoastWatch — global VIIRS L3 chlorophyll
+// Gap-filled VIIRS science-quality chlorophyll (4 km, 2012–present, weekly) for
+// chlorophyll trends. CoastWatch has no CORS header, so we read it via JSONP.
+const CHL_L3 = { base: CWATCH, dataset: 'noaacwNPPVIIRSSQchlaWeekly', var: 'chlor_a', alt: true, jsonp: true, cadence: 7 };
+const TILE = 512;
+
+// Every selectable layer. kind 'gibs' = NASA WMTS tiles (optionally decoded for
+// averaging/comparison via `palette`); kind 'erddap' = NOAA CRW WMS (display only).
+// compare: 'ratio' (log10 A/B, for chlorophyll), 'diff' (A−B °C, for SST), 'none'.
+const LAYERS = {
+  'chl-modis': { group: 'Chlorophyll-a', label: 'Chlorophyll — MODIS + SeaWiFS', kind: 'gibs', gibs: 'MODIS_Aqua_L2_Chlorophyll_A', chlTiles: true, start: '1997-09-04', legend: LEG + '/MODIS_Chlorophyll_H.svg', legendTitle: 'Chlorophyll-a (mg/m³) — log scale', unit: 'mg/m³', palette: CHL, log: true, avg: true, compare: 'ratio', diffK: Math.LN10, trend: 'tile', gappy: true, trendErddap: CHL_L3,
+    cap: 'Chlorophyll-a (mg/m³, log). MODIS-Aqua 1 km from 2002; SeaWiFS ~4 km before — back to 1997. Cross-sensor differences carry extra uncertainty.' },
+  'chl-viirs': { group: 'Chlorophyll-a', label: 'Chlorophyll — VIIRS NOAA-20', kind: 'gibs', gibs: 'VIIRS_NOAA20_Chlorophyll_a', start: '2017-12-13', legend: LEG + '/VIIRS_Chlorophyll_H.svg', legendTitle: 'Chlorophyll-a (mg/m³) — log scale', unit: 'mg/m³', palette: CHL, log: true, avg: true, compare: 'ratio', diffK: Math.LN10, trend: 'tile', gappy: true, trendErddap: CHL_L3,
+    cap: 'NASA GIBS chlorophyll-a (mg/m³, log scale). White = clouds / no pass.' },
+  'chl-pace': { group: 'Chlorophyll-a', label: 'Chlorophyll — PACE OCI', kind: 'gibs', gibs: 'OCI_PACE_Chlorophyll_a', start: '2024-02-25', legend: LEG + '/VIIRS_Chlorophyll_H.svg', legendTitle: 'Chlorophyll-a (mg/m³) — log scale', unit: 'mg/m³', palette: CHL, log: true, avg: true, compare: 'ratio', diffK: Math.LN10, trend: 'tile', gappy: true, trendErddap: CHL_L3,
+    cap: 'NASA GIBS chlorophyll-a (mg/m³, log scale). White = clouds / no pass.' },
+  'sst': { group: 'Sea surface temperature', label: 'SST — GHRSST', kind: 'gibs', gibs: 'GHRSST_L4_MUR_Sea_Surface_Temperature', sstTiles: true, start: '1981-09-01', legend: LEG + '/GHRSST_Sea_Surface_Temperature_H.svg', legendTitle: 'Sea surface temperature (°C)', unit: '°C', palette: SST, log: false, avg: true, compare: 'diff', diffK: 3, trend: 'tile', predict: true,
+    cap: 'GHRSST sea surface temperature (°C). MUR 1 km from 2002; AVHRR-OI 0.25° before that — back to 1981.' },
+  'sstanom': { group: 'Sea surface temperature', label: 'SST anomaly — MUR', kind: 'gibs', gibs: 'GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies', start: '2019-07-23', legend: LEG + '/GHRSST_Sea_Surface_Temperature_Anomalies_H.svg', legendTitle: 'SST anomaly (°C)', unit: '°C', palette: SSTANOM, log: false, avg: false, compare: 'none', trend: 'tile',
+    cap: 'MUR SST difference from the daily climatology (°C). Red = warmer than normal.' },
+  'crw-sst': { group: 'Coral Reef Watch (NOAA)', label: 'SST — CoralTemp 5 km', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_SST', start: '1985-04-01', legendTitle: 'Sea surface temperature (°C)', unit: '°C', avg: false, compare: 'none', trend: 'erddap',
+    cap: 'NOAA Coral Reef Watch sea surface temperature (°C), 5 km daily — precise point values back to 1985. For coloured difference/prediction maps use the GHRSST SST layer.' },
+  'crw-sstanom': { group: 'Coral Reef Watch (NOAA)', label: 'SST anomaly — 5 km', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_SSTANOMALY', start: '1985-04-01', legendTitle: 'SST anomaly (°C)', unit: '°C', avg: false, compare: 'none', trend: 'erddap',
+    cap: 'CRW SST difference from climatology (°C). Red = warmer than normal. Daily, back to 1985.' },
+  'crw-dhw': { group: 'Coral Reef Watch (NOAA)', label: 'Coral heat stress — DHW', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_DHW', start: '1985-04-01', legendTitle: 'Degree Heating Weeks (°C-weeks)', unit: '°C-wk', avg: false, compare: 'none', trend: 'erddap',
+    cap: 'Degree Heating Weeks (°C-weeks): accumulated heat stress. ≥4 → bleaching likely, ≥8 → severe / mortality risk.' },
+  'crw-baa': { group: 'Coral Reef Watch (NOAA)', label: 'Coral bleaching alert area', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_BAA', start: '1985-04-01', legendTitle: 'Bleaching Alert Area (0–4)', unit: 'level', avg: false, compare: 'none', trend: 'erddap',
+    cap: 'Bleaching Alert Area category: No Stress → Watch → Warning → Alert 1 → Alert 2.' }
+};
+
+function latestDate() {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 2); // GIBS near-real-time lag
+  return d.toISOString().slice(0, 10);
+}
+
+const map = L.map('map', { crs: GIBS4326, center: [15, 0], zoom: 2, minZoom: 1, maxZoom: 7 });
+
+// Basemap (bathymetry) + reference coastlines/labels, all in 4326.
+L.tileLayer(`${GIBS}/BlueMarble_ShadedRelief_Bathymetry/default/500m/{z}/{y}/{x}.jpeg`, {
+  tileSize: TILE, maxNativeZoom: 7, noWrap: true, attribution: 'Imagery © NASA EOSDIS GIBS'
+}).addTo(map);
+
+let chlLayer = null;
+const statusEl = document.getElementById('status');
+
+// ---- Browser-side weekly/monthly averaging --------------------------------
+function dayWindow(endDate, count, minDate) {
+  const days = [];
+  const d = new Date(endDate + 'T00:00:00Z');
+  for (let i = 0; i < count; i++) {
+    const s = d.toISOString().slice(0, 10);
+    if (s < minDate) break;
+    days.push(s);
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return days;
+}
+
+// SST tiles span 1981–present by switching products by date: MUR (1 km, gap-free)
+// from 2002, AVHRR-OI / OISST (0.25°, back to 1981 — includes 1997) before that.
+// Both share the GHRSST colour scale, so they decode with the same SST palette.
+function sstSource(date) {
+  return date >= '2002-06-01'
+    ? { layer: 'GHRSST_L4_MUR_Sea_Surface_Temperature', tms: '1km', z: 6 }
+    : { layer: 'GHRSST_L4_AVHRR-OI_Sea_Surface_Temperature', tms: '2km', z: 5 };
+}
+// Chlorophyll spans 1997–present: MODIS-Aqua from mid-2002, SeaWiFS before
+// (back to 1997-09). Same chlorophyll colour scale, so the same palette decodes both.
+function chlSource(date) {
+  return date >= '2002-07-04'
+    ? { layer: 'MODIS_Aqua_L2_Chlorophyll_A', tms: '1km', z: 6 }
+    : { layer: 'SEAWIFS_ORBVIEW-2_GAC_Chlorophyll_a', tms: '1km', z: 6 };
+}
+// Which GIBS layer/tilematrix/zoom to use for a given config + date.
+function tileSrcFor(cfg, date) {
+  if (cfg.sstTiles) return sstSource(date);
+  if (cfg.chlTiles) return chlSource(date);
+  return { layer: cfg.gibs, tms: '1km', z: 6 };
+}
+// Tile URL for a grid layer (options carry sstTiles / chlTiles + gibs).
+function gridTileUrl(opts, date, z, y, x) {
+  const s = opts.sstTiles ? sstSource(date) : opts.chlTiles ? chlSource(date) : { layer: opts.gibs, tms: '1km' };
+  return `${GIBS}/${s.layer}/default/${date}/${s.tms}/${z}/${y}/${x}.png`;
+}
+
+const AverageLayer = L.GridLayer.extend({
+  createTile: function (coords, done) {
+    const tile = document.createElement('canvas');
+    const size = this.getTileSize();
+    tile.width = size.x; tile.height = size.y;
+    const ctx = tile.getContext('2d');
+
+    const { gibs, days, palette, log } = this.options;
+    const n = size.x * size.y;
+    const sum = new Float64Array(n);
+    const count = new Uint16Array(n);
+    let pending = days.length;
+
+    const scratch = document.createElement('canvas');
+    scratch.width = size.x; scratch.height = size.y;
+    const sctx = scratch.getContext('2d', { willReadFrequently: true });
+
+    const accumulate = (img) => {
+      sctx.clearRect(0, 0, size.x, size.y);
+      sctx.drawImage(img, 0, 0, size.x, size.y);
+      const data = sctx.getImageData(0, 0, size.x, size.y).data;
+      for (let i = 0; i < n; i++) {
+        if (data[i * 4 + 3] < 128) continue;
+        const v = palette.decode(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+        if (v == null) continue;
+        sum[i] += log ? Math.log(v) : v;   // geometric mean for chlorophyll, arithmetic for SST
+        count[i]++;
+      }
+    };
+
+    const finish = () => {
+      const out = ctx.createImageData(size.x, size.y);
+      for (let i = 0; i < n; i++) {
+        if (count[i] === 0) continue;
+        const mean = log ? Math.exp(sum[i] / count[i]) : sum[i] / count[i];
+        const [r, g, b] = palette.encode(mean);
+        out.data[i * 4] = r; out.data[i * 4 + 1] = g;
+        out.data[i * 4 + 2] = b; out.data[i * 4 + 3] = 242;
+      }
+      ctx.putImageData(out, 0, 0);
+      done(null, tile);
+    };
+
+    days.forEach((date) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => { try { accumulate(img); } catch (e) {} if (--pending === 0) finish(); };
+      img.onerror = () => { if (--pending === 0) finish(); };
+      img.src = gridTileUrl(this.options, date, coords.z, coords.y, coords.x);
+    });
+
+    return tile;
+  }
+});
+
+// ---- Difference (A vs B) on a diverging scale -----------------------------
+// blue = lower at A, white = no change, red = higher at A. `t` is the change
+// already normalised to [-1, 1] (chlorophyll: log10 ratio over 1 decade; SST:
+// °C difference over the saturation range).
+function divColor(t) {
+  t = Math.max(-1, Math.min(1, t));
+  const white = [244, 244, 244], blue = [33, 102, 172], red = [178, 24, 43];
+  const mix = (a, b, f) => [
+    Math.round(a[0] + (b[0] - a[0]) * f),
+    Math.round(a[1] + (b[1] - a[1]) * f),
+    Math.round(a[2] + (b[2] - a[2]) * f)
+  ];
+  return t < 0 ? mix(white, blue, -t) : mix(white, red, t);
+}
+
+const DifferenceLayer = L.GridLayer.extend({
+  createTile: function (coords, done) {
+    const tile = document.createElement('canvas');
+    const size = this.getTileSize();
+    tile.width = size.x; tile.height = size.y;
+    const ctx = tile.getContext('2d');
+
+    // log: aggregate in log space (chlorophyll); K: value that saturates the
+    // diverging scale (LN10 for a 10× ratio, or °C for SST).
+    const { gibs, daysA, daysB, palette, log, K } = this.options;
+    const n = size.x * size.y;
+    const sumA = new Float64Array(n), cntA = new Uint16Array(n);
+    const sumB = new Float64Array(n), cntB = new Uint16Array(n);
+    let pending = daysA.length + daysB.length;
+
+    const scratch = document.createElement('canvas');
+    scratch.width = size.x; scratch.height = size.y;
+    const sctx = scratch.getContext('2d', { willReadFrequently: true });
+
+    const accumulate = (img, sum, cnt) => {
+      sctx.clearRect(0, 0, size.x, size.y);
+      sctx.drawImage(img, 0, 0, size.x, size.y);
+      const data = sctx.getImageData(0, 0, size.x, size.y).data;
+      for (let i = 0; i < n; i++) {
+        if (data[i * 4 + 3] < 128) continue;
+        const v = palette.decode(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+        if (v == null) continue;
+        sum[i] += log ? Math.log(v) : v;
+        cnt[i]++;
+      }
+    };
+
+    const finish = () => {
+      const out = ctx.createImageData(size.x, size.y);
+      for (let i = 0; i < n; i++) {
+        if (cntA[i] === 0 || cntB[i] === 0) continue; // need valid data in both
+        const [r, g, b] = divColor((sumA[i] / cntA[i] - sumB[i] / cntB[i]) / K);
+        out.data[i * 4] = r; out.data[i * 4 + 1] = g;
+        out.data[i * 4 + 2] = b; out.data[i * 4 + 3] = 235;
+      }
+      ctx.putImageData(out, 0, 0);
+      done(null, tile);
+    };
+
+    const load = (date, sum, cnt) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => { try { accumulate(img, sum, cnt); } catch (e) {} if (--pending === 0) finish(); };
+      img.onerror = () => { if (--pending === 0) finish(); };
+      img.src = gridTileUrl(this.options, date, coords.z, coords.y, coords.x);
+    };
+
+    daysA.forEach((d) => load(d, sumA, cntA));
+    daysB.forEach((d) => load(d, sumB, cntB));
+    return tile;
+  }
+});
+
+// Map an anchor→target forecast onto the analog year while preserving the real
+// number of days between them — so a Dec→Jan target correctly rolls into the
+// next year (e.g. anchor 2026-12-15, target 2027-01-01, analog 2015 →
+// B = 2015-12-15, C = 2016-01-01), not back to 2015-01-01.
+function analogDates(anchorISO, targetISO, X) {
+  const anchor = new Date(anchorISO + 'T00:00:00Z');
+  const spanDays = Math.round((new Date(targetISO + 'T00:00:00Z') - anchor) / 86400000);
+  const b = new Date(Date.UTC(+X, anchor.getUTCMonth(), anchor.getUTCDate()));
+  const c = new Date(b.getTime() + spanDays * 86400000);
+  return { A: anchorISO, B: b.toISOString().slice(0, 10), C: c.toISOString().slice(0, 10) };
+}
+
+// ---- Analog prediction (MUR SST): anchor + (analog-year change) -----------
+// Per pixel: predicted = A + (C − B), where A = anchor-date SST, B = analog year
+// at the anchor's day-of-year, C = analog year at the target day-of-year. I.e.
+// "today's ocean, marched forward the way year X did." Naive analog, not a model.
+const PredictionLayer = L.GridLayer.extend({
+  createTile: function (coords, done) {
+    const tile = document.createElement('canvas');
+    const size = this.getTileSize();
+    tile.width = size.x; tile.height = size.y;
+    const ctx = tile.getContext('2d');
+
+    const { gibs, palette, dates } = this.options; // dates = [A, B, C]
+    const n = size.x * size.y;
+    const val = [new Float64Array(n), new Float64Array(n), new Float64Array(n)];
+    const ok = [new Uint8Array(n), new Uint8Array(n), new Uint8Array(n)];
+    let pending = 3;
+
+    const scratch = document.createElement('canvas');
+    scratch.width = size.x; scratch.height = size.y;
+    const sctx = scratch.getContext('2d', { willReadFrequently: true });
+
+    const accumulate = (img, k) => {
+      try {
+        sctx.clearRect(0, 0, size.x, size.y);
+        sctx.drawImage(img, 0, 0, size.x, size.y);
+        const data = sctx.getImageData(0, 0, size.x, size.y).data;
+        for (let i = 0; i < n; i++) {
+          if (data[i * 4 + 3] < 128) continue;
+          const v = palette.decode(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+          if (v == null) continue;
+          val[k][i] = v; ok[k][i] = 1;
+        }
+      } catch (e) {}
+    };
+
+    const finish = () => {
+      const out = ctx.createImageData(size.x, size.y);
+      for (let i = 0; i < n; i++) {
+        if (!ok[0][i] || !ok[1][i] || !ok[2][i]) continue;
+        const [r, g, b] = palette.encode(val[0][i] + (val[2][i] - val[1][i]));
+        out.data[i * 4] = r; out.data[i * 4 + 1] = g; out.data[i * 4 + 2] = b; out.data[i * 4 + 3] = 242;
+      }
+      ctx.putImageData(out, 0, 0);
+      done(null, tile);
+    };
+
+    dates.forEach((date, k) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => { accumulate(img, k); if (--pending === 0) finish(); };
+      img.onerror = () => { if (--pending === 0) finish(); };
+      img.src = gridTileUrl(this.options, date, coords.z, coords.y, coords.x);
+    });
+    return tile;
+  }
+});
+
+// ---- NOAA Coral Reef Watch (ERDDAP WMS, display only) ---------------------
+function erddapLayer(cfg, date) {
+  const layer = L.tileLayer.wms(`${ERDDAP}/wms/${cfg.dataset}/request?`, {
+    layers: `${cfg.dataset}:${cfg.var}`, styles: '', format: 'image/png',
+    transparent: true, version: '1.1.1', tileSize: TILE, opacity: 0.9, zIndex: 10,
+    noWrap: true, attribution: 'CRW data © NOAA Coral Reef Watch via PacIOOS'
+  });
+  layer.setParams({ time: date }, true); // ERDDAP snaps to the nearest daily date
+  return layer;
+}
+function erddapLegend(cfg) {
+  return `${ERDDAP}/griddap/${cfg.dataset}.png?${cfg.var}%5B(last)%5D%5B(0):(40)%5D%5B(-180):(180)%5D&.legend=Only`;
+}
+
+// ---- Layer + UI orchestration ---------------------------------------------
+const layerEl   = document.getElementById('layer');
+const avgEl     = document.getElementById('avg');
+const avgWrap   = document.getElementById('avg-controls');
+const changeEl  = document.getElementById('change');
+const changeWrap= document.getElementById('change-controls');
+const dateEl    = document.getElementById('date');
+const dateBEl   = document.getElementById('dateB');
+const compareEl = document.getElementById('compare');
+const compareRow= document.getElementById('compare-row');
+const predictEl = document.getElementById('predict');
+const predictRow = document.getElementById('predict-row');
+const analogYearEl = document.getElementById('analog-year');
+const predictDateEl = document.getElementById('predict-date');
+const legendImg = document.getElementById('legendimg');
+const legendLbl = document.getElementById('legendlabel');
+const diffLeg   = document.getElementById('difflegend');
+const diffTicks = document.getElementById('diffticks');
+const legendCap = document.getElementById('legendcap');
+const dateLbl   = document.getElementById('datelabel');
+const noteEl    = document.getElementById('note');
+const trendEl     = document.getElementById('trend');
+const trendHint   = document.getElementById('trend-hint');
+const trendTitle  = document.getElementById('trend-title');
+const trendMeta   = document.getElementById('trend-meta');
+const trendCanvas = document.getElementById('trend-canvas');
+const trendStartEl = document.getElementById('trend-start');
+const trendEndEl   = document.getElementById('trend-end');
+const trendOnEl    = document.getElementById('trend-on');
+const trendDatesEl = document.getElementById('trend-dates');
+
+// Populate the layer dropdown, grouped by variable.
+{
+  const groups = {};
+  for (const [id, cfg] of Object.entries(LAYERS)) {
+    (groups[cfg.group] = groups[cfg.group] || []).push([id, cfg]);
+  }
+  for (const [group, items] of Object.entries(groups)) {
+    const og = document.createElement('optgroup');
+    og.label = group;
+    for (const [id, cfg] of items) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = `${cfg.label} (${cfg.start.slice(0, 4)}–present)`;
+      og.appendChild(opt);
+    }
+    layerEl.appendChild(og);
+  }
+}
+const layerCfg = () => LAYERS[layerEl.value];
+
+// The active difference comparison, or { on:false }. "Change over last N days"
+// (the Change dropdown) derives reference date B as A − N; otherwise the manual
+// "Compare with another date" checkbox uses dateB. The two are mutually exclusive.
+function diffState(cfg) {
+  if (!cfg || cfg.compare === 'none') return { on: false };
+  const cd = parseInt(changeEl.value, 10) || 0;
+  if (cd > 0) {
+    const d = new Date((dateEl.value || latestDate()) + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - cd);
+    let b = d.toISOString().slice(0, 10);
+    if (b < cfg.start) b = cfg.start;
+    return { on: true, dateB: b, change: cd };
+  }
+  if (compareEl.checked && dateBEl.value) return { on: true, dateB: dateBEl.value, change: 0 };
+  return { on: false };
+}
+
+function updateLayer() {
+  if (chlLayer) map.removeLayer(chlLayer);
+  statusEl.textContent = '';
+  const cfg = layerCfg();
+  const date = dateEl.value;
+  if (!date) return;
+  const span = cfg.avg ? parseInt(avgEl.value, 10) : 1;
+  const start = cfg.start;
+  const predicting = cfg.predict && predictEl.checked && analogYearEl.value && predictDateEl.value;
+  const ds = predicting ? { on: false } : diffState(cfg);
+  const diffMode = ds.on;
+  const dateB = ds.dateB;
+
+  legendImg.style.display = diffMode ? 'none' : '';
+  diffLeg.style.display = diffMode ? '' : 'none';
+
+  if (cfg.kind === 'erddap') {
+    chlLayer = erddapLayer(cfg, date); // CRW can't be repainted client-side; map stays at anchor date
+    statusEl.textContent = `Loading ${cfg.label}…`;
+    let errors = 0;
+    chlLayer.on('tileerror', () => {
+      if (++errors >= 4) statusEl.textContent = 'Data server slow or unavailable — try again shortly.';
+    });
+    chlLayer.on('load', () => { statusEl.textContent = ''; });
+    legendImg.src = erddapLegend(cfg);
+  } else if (predicting) {
+    const ad = analogDates(date, predictDateEl.value, analogYearEl.value);
+    const z = Math.min(tileSrcFor(cfg, ad.A).z, tileSrcFor(cfg, ad.B).z, tileSrcFor(cfg, ad.C).z);
+    chlLayer = new PredictionLayer({ sstTiles: cfg.sstTiles, gibs: cfg.gibs, palette: cfg.palette, dates: [ad.A, ad.B, ad.C], tileSize: TILE, maxNativeZoom: z, noWrap: true, opacity: 0.95, zIndex: 10 });
+    statusEl.textContent = 'Computing prediction…';
+    chlLayer.on('load', () => { statusEl.textContent = ''; });
+    legendImg.src = cfg.legend;
+  } else if (diffMode) {
+    const daysA = span === 1 ? [date] : dayWindow(date, span, start);
+    const daysB = span === 1 ? [dateB] : dayWindow(dateB, span, start);
+    const z = Math.min(tileSrcFor(cfg, date).z, tileSrcFor(cfg, dateB).z);
+    chlLayer = new DifferenceLayer({ sstTiles: cfg.sstTiles, chlTiles: cfg.chlTiles, gibs: cfg.gibs, daysA, daysB, palette: cfg.palette, log: cfg.log, K: cfg.diffK, tileSize: TILE, maxNativeZoom: z, noWrap: true, opacity: 0.95, zIndex: 10 });
+    statusEl.textContent = 'Computing difference…';
+    chlLayer.on('load', () => { statusEl.textContent = ''; });
+  } else if (span === 1) {
+    const src = tileSrcFor(cfg, date);
+    chlLayer = L.tileLayer(`${GIBS}/${src.layer}/default/${date}/${src.tms}/{z}/{y}/{x}.png`, {
+      tileSize: TILE, maxNativeZoom: src.z, noWrap: true, opacity: 0.95, zIndex: 10,
+      crossOrigin: 'anonymous' // so map-cached tiles stay canvas-readable for point sampling
+    });
+    let errors = 0;
+    chlLayer.on('tileerror', () => {
+      if (++errors >= 4) statusEl.textContent = 'Little or no data for this day — try another date or an average.';
+    });
+    legendImg.src = cfg.legend;
+  } else {
+    const days = dayWindow(date, span, start);
+    chlLayer = new AverageLayer({ sstTiles: cfg.sstTiles, chlTiles: cfg.chlTiles, gibs: cfg.gibs, days, palette: cfg.palette, log: cfg.log, tileSize: TILE, maxNativeZoom: tileSrcFor(cfg, date).z, noWrap: true, opacity: 0.95, zIndex: 10 });
+    statusEl.textContent = `Compositing ${days.length}-day average…`;
+    chlLayer.on('load', () => { statusEl.textContent = ''; });
+    legendImg.src = cfg.legend;
+  }
+
+  chlLayer.addTo(map);
+  updateLabels();
+  scheduleTrend();
+}
+
+function updateLabels() {
+  const cfg = layerCfg();
+  // Prediction (SST only) and Compare are mutually exclusive special modes.
+  predictRow.style.display = cfg.predict ? '' : 'none';
+  if (!cfg.predict) predictEl.checked = false;
+  const predicting = cfg.predict && predictEl.checked;
+  document.getElementById('predict-controls').style.display = predicting ? '' : 'none';
+
+  const compareDisabled = cfg.compare === 'none' || predicting;
+  if (compareDisabled) { compareEl.checked = false; changeEl.value = '0'; }
+  const cd = parseInt(changeEl.value, 10) || 0;             // change-over-last-N-days (0 = off)
+  const comparing = !compareDisabled && (compareEl.checked || cd > 0);
+  avgWrap.style.display = (cfg.avg && !predicting) ? '' : 'none';
+  changeWrap.style.display = compareDisabled ? 'none' : '';
+  // The manual "compare with another date" controls hide while a Change window is active (they're mutually exclusive).
+  compareRow.style.display = (!compareDisabled && cd === 0) ? '' : 'none';
+  document.getElementById('compare-controls').style.display = (comparing && cd === 0) ? '' : 'none';
+
+  const span = cfg.avg ? parseInt(avgEl.value, 10) : 1;
+  dateLbl.textContent = predicting ? 'Anchor date (forecast starts here)'
+    : cd > 0 ? `Date (compared with ${cd} days earlier)`
+    : (cfg.avg && span > 1) ? `End date${comparing ? ' A' : ''} (averages the ${span} days up to it)`
+    : (comparing ? 'Date (A)' : 'Date');
+
+  if (cfg.compare === 'ratio') diffTicks.innerHTML = '<span>&divide;10</span><span>&divide;3</span><span>same</span><span>&times;3</span><span>&times;10</span>';
+  else if (cfg.compare === 'diff') diffTicks.innerHTML = '<span>&minus;3&deg;C</span><span>&minus;1.5</span><span>0</span><span>+1.5</span><span>+3&deg;C</span>';
+
+  legendLbl.textContent = predicting ? 'Predicted SST (°C)'
+    : comparing ? (cd > 0
+        ? `Change over last ${cd} days (${cfg.compare === 'ratio' ? 'ratio' : '°C'})`
+        : (cfg.compare === 'ratio' ? 'Change in chlorophyll (ratio A ÷ B)' : 'Change in SST (A − B, °C)'))
+    : cfg.legendTitle;
+
+  if (predicting) {
+    legendCap.textContent = '';
+    noteEl.innerHTML = cfg.kind === 'erddap' ? 'Map stays at the anchor date; click a point for a value.' : '';
+  } else if (comparing) {
+    const aLbl = cd > 0 ? 'now' : 'A', bLbl = cd > 0 ? `${cd} days earlier` : 'B', hiAt = cd > 0 ? 'now' : 'at A';
+    legendCap.textContent = cfg.compare === 'ratio'
+      ? `Ratio ${aLbl} ÷ ${bLbl}. Red = higher ${hiAt}, blue = lower, white = unchanged (saturates at ×10). Shown only where both dates have valid data.`
+      : `Difference ${aLbl} − ${bLbl} in °C. Red = warmer ${hiAt}, blue = cooler, white = unchanged (saturates at ±3 °C). Shown only where both dates have valid data.`;
+    noteEl.innerHTML = cd > 0
+      ? `Compares the selected date with ${cd} days earlier. Use weekly/monthly averaging to fill cloud gaps.`
+      : 'Use weekly/monthly averaging to fill gaps and compare seasons or years.';
+  } else {
+    legendCap.textContent = cfg.cap + (cfg.avg && span > 1 ? ` Averaged over ${span} days (per-pixel ${cfg.log ? 'geometric' : ''} mean).` : '');
+    noteEl.innerHTML = cfg.kind === 'erddap'
+      ? 'Source: NOAA Coral Reef Watch 5 km, daily, 1985–present (via PacIOOS ERDDAP).'
+      : 'Gaps = clouds / no pass. Zoom in for faster averaging — wide views fetch many tiles.';
+  }
+}
+
+function clampDate() {
+  const lo = layerCfg().start, hi = latestDate();
+  for (const el of [dateEl, dateBEl]) {
+    el.min = lo; el.max = hi;
+    if (el.value && el.value < lo) el.value = lo;
+    if (el.value && el.value > hi) el.value = hi;
+  }
+  clampTrendDates();
+}
+
+function shiftDay(n) {
+  const d = new Date(dateEl.value + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  dateEl.value = d.toISOString().slice(0, 10);
+  clampDate();
+  updateLayer();
+}
+
+function shiftDayB(n) {
+  const d = new Date((dateBEl.value || dateEl.value) + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  dateBEl.value = d.toISOString().slice(0, 10);
+  clampDate();
+  updateLayer();
+}
+
+// Fill the analog-year dropdown from the layer's full-year range.
+function populateAnalogYears() {
+  const cfg = layerCfg();
+  if (!cfg.predict) return;
+  const first = parseInt(cfg.start.slice(0, 4), 10) + 1;
+  const last = parseInt(latestDate().slice(0, 4), 10) - 1;
+  const keep = analogYearEl.value;
+  analogYearEl.innerHTML = '';
+  for (let y = last; y >= first; y--) {
+    const o = document.createElement('option'); o.value = String(y); o.textContent = String(y);
+    analogYearEl.appendChild(o);
+  }
+  if (keep && +keep >= first && +keep <= last) analogYearEl.value = keep;
+}
+
+layerEl.addEventListener('change', () => { populateAnalogYears(); clampDate(); updateLayer(); });
+avgEl.addEventListener('change', () => { updateLayer(); });
+dateEl.addEventListener('change', () => { clampDate(); updateLayer(); });
+dateBEl.addEventListener('change', () => { clampDate(); updateLayer(); });
+changeEl.addEventListener('change', () => {
+  if ((parseInt(changeEl.value, 10) || 0) > 0) { compareEl.checked = false; predictEl.checked = false; } // mutually exclusive
+  updateLayer();
+});
+compareEl.addEventListener('change', () => {
+  if (compareEl.checked) {
+    predictEl.checked = false; changeEl.value = '0'; // mutually exclusive
+    if (!dateBEl.value) { const d = new Date(dateEl.value + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() - 1); dateBEl.value = d.toISOString().slice(0, 10); }
+  }
+  clampDate();
+  updateLayer();
+});
+predictEl.addEventListener('change', () => {
+  if (predictEl.checked) {
+    compareEl.checked = false; changeEl.value = '0'; // mutually exclusive
+    populateAnalogYears();
+    if (!predictDateEl.value) { const d = new Date(dateEl.value + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 120); predictDateEl.value = d.toISOString().slice(0, 10); }
+  }
+  updateLayer();
+});
+analogYearEl.addEventListener('change', updateLayer);
+predictDateEl.addEventListener('change', updateLayer);
+document.getElementById('prev').addEventListener('click', () => shiftDay(-1));
+document.getElementById('next').addEventListener('click', () => shiftDay(1));
+document.getElementById('prevB').addEventListener('click', () => shiftDayB(-1));
+document.getElementById('nextB').addEventListener('click', () => shiftDayB(1));
+document.getElementById('latest').addEventListener('click', () => { dateEl.value = latestDate(); clampDate(); updateLayer(); });
+document.getElementById('elnino').addEventListener('click', () => { dateEl.value = '2015-12-26'; clampDate(); updateLayer(); });
+document.getElementById('lanina').addEventListener('click', () => { dateEl.value = '2021-01-09'; clampDate(); updateLayer(); });
+
+// Reference coastlines + labels above the data layer.
+L.tileLayer(`${GIBS}/Reference_Features_15m/default/15.625m/{z}/{y}/{x}.png`, { tileSize: TILE, maxNativeZoom: 7, noWrap: true, zIndex: 20 }).addTo(map);
+L.tileLayer(`${GIBS}/Reference_Labels_15m/default/15.625m/{z}/{y}/{x}.png`, { tileSize: TILE, maxNativeZoom: 7, noWrap: true, zIndex: 21 }).addTo(map);
+
+// Collapsible panel — keeps the map usable on small screens.
+const panel = document.getElementById('panel');
+const toggleBtn = document.getElementById('toggle');
+function setCollapsed(c) {
+  panel.classList.toggle('collapsed', c);
+  toggleBtn.innerHTML = c ? '&#9660;' : '&#9650;'; // ▼ tap to open, ▲ tap to close
+  toggleBtn.setAttribute('aria-expanded', String(!c));
+}
+toggleBtn.addEventListener('click', () => setCollapsed(!panel.classList.contains('collapsed')));
+setCollapsed(window.matchMedia('(max-width: 600px)').matches);
+
+// ---- Click-to-trend: time series of the selected layer at a point ---------
+let trendPt = null, trendMarker = null, trendSeq = 0;
+// Shared scratch canvas for reading tile pixels. A canvas stays tainted for
+// life once a non-CORS image is drawn to it, so we can recreate it to recover.
+let _sc, _scx;
+function resetScratch() { _sc = document.createElement('canvas'); _sc.width = TILE; _sc.height = TILE; _scx = _sc.getContext('2d', { willReadFrequently: true }); }
+resetScratch();
+
+function loadImg(url) {
+  return new Promise((res) => {
+    const im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = () => res(im); im.onerror = () => res(null); im.src = url;
+  });
+}
+// Pixel within the GIBS 4326 tile grid (512 px tiles, 0.5625°/px at z0).
+function lonLatToTile(lon, lat, z) {
+  const res = 0.5625 / Math.pow(2, z);
+  const gx = (lon + 180) / res, gy = (90 - lat) / res;
+  return { tx: Math.floor(gx / TILE), ty: Math.floor(gy / TILE), px: Math.floor(gx) % TILE, py: Math.floor(gy) % TILE };
+}
+// Average a (2*radius+1)² box of pixels around the point — geometric mean for
+// log layers (chlorophyll). Boxing fills small cloud gaps and reduces noise.
+async function sampleTile(cfg, date, lat, lng, radius = 4) {
+  const src = tileSrcFor(cfg, date);
+  const { tx, ty, px, py } = lonLatToTile(lng, lat, src.z);
+  const img = await loadImg(`${GIBS}/${src.layer}/default/${date}/${src.tms}/${src.z}/${ty}/${tx}.png`);
+  if (!img) return null;
+  const x0 = Math.max(0, px - radius), y0 = Math.max(0, py - radius);
+  const w = Math.min(TILE - 1, px + radius) - x0 + 1, h = Math.min(TILE - 1, py + radius) - y0 + 1;
+  let data;
+  try {
+    _scx.clearRect(0, 0, TILE, TILE);
+    _scx.drawImage(img, 0, 0, TILE, TILE);
+    data = _scx.getImageData(x0, y0, w, h).data; // throws if the tile cache is CORS-tainted
+  } catch (e) { resetScratch(); return null; }
+  let sum = 0, n = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (data[i * 4 + 3] < 128) continue;
+    const v = cfg.palette.decode(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+    if (v == null) continue;
+    sum += cfg.log ? Math.log(v) : v; n++;
+  }
+  if (n === 0) return null;
+  return cfg.log ? Math.exp(sum / n) : sum / n;
+}
+
+// Rolling mean over a series (window = ±win points), in log space for log layers.
+function smoothSeries(series, win, log) {
+  return series.map((p, i) => {
+    let sum = 0, n = 0;
+    for (let j = Math.max(0, i - win); j <= Math.min(series.length - 1, i + win); j++) {
+      sum += log ? Math.log(series[j].v) : series[j].v; n++;
+    }
+    return { t: p.t, v: log ? Math.exp(sum / n) : sum / n };
+  });
+}
+function sampleDates(startISO, endISO, maxN) {
+  const s = Date.parse(startISO + 'T00:00:00Z'), e = Date.parse(endISO + 'T00:00:00Z');
+  const days = Math.max(1, Math.round((e - s) / 86400000));
+  const step = Math.max(1, Math.ceil(days / maxN));
+  const out = [];
+  for (let d = e; d >= s; d -= step * 86400000) out.push(new Date(d).toISOString().slice(0, 10));
+  return out.reverse();
+}
+async function fetchTileSeries(cfg, lat, lng, startISO, endISO) {
+  const dates = sampleDates(startISO, endISO, 60);
+  const vals = await Promise.all(dates.map(async (date) => {
+    const v = await sampleTile(cfg, date, lat, lng);
+    return v == null ? null : { t: Date.parse(date + 'T00:00:00Z'), v };
+  }));
+  return vals.filter(Boolean);
+}
+// JSONP loader — for ERDDAP hosts without CORS (CoastWatch). ERDDAP wraps the
+// .json response when &.jsonp=fn is appended.
+let _jsonpN = 0;
+function jsonpGet(url) {
+  return new Promise((resolve, reject) => {
+    const cb = 'chljsonp' + (++_jsonpN);
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('jsonp timeout')); }, 25000);
+    function cleanup() { clearTimeout(timer); delete window[cb]; s.remove(); }
+    window[cb] = (data) => { cleanup(); resolve(data); };
+    s.onerror = () => { cleanup(); reject(new Error('jsonp error')); };
+    s.src = url + '&.jsonp=' + cb;
+    document.body.appendChild(s);
+  });
+}
+
+// Where a layer's time series / trend comes from: an ERDDAP source descriptor,
+// or null for tile-sampled layers (SST).
+function seriesSource(cfg) {
+  if (cfg.trendErddap) return cfg.trendErddap;                                  // chlorophyll → CoastWatch L3 (JSONP)
+  if (cfg.kind === 'erddap') return { base: ERDDAP, dataset: cfg.dataset, var: cfg.var, alt: false, jsonp: false, cadence: 1 }; // CRW → PacIOOS (fetch), daily grid
+  return null;
+}
+
+// ERDDAP errors if a requested date is outside the dataset's coverage, and L3
+// products lag real time (and may start later than the display layer), so fetch
+// the actual first/last dates once (cached) and clamp queries to them.
+const _erddapJson = (src, url) => src.jsonp ? jsonpGet(url) : fetch(url).then((r) => { if (!r.ok) throw new Error('erddap ' + r.status); return r.json(); });
+const _trCache = new Map();
+function erddapTimeRange(src) {
+  const key = src.base + '|' + src.dataset;
+  if (!_trCache.has(key)) {
+    _trCache.set(key, (async () => {
+      const get = async (sel) => (await _erddapJson(src, `${src.base}/griddap/${src.dataset}.json?time%5B${sel}%5D`)).table.rows[0][0].slice(0, 10);
+      const [min, max] = await Promise.all([get('0'), get('last')]);
+      return { min, max };
+    })().catch(() => null));
+  }
+  return _trCache.get(key);
+}
+
+async function fetchErddapSeries(src, lat, lng, startISO, endISO) {
+  let start = startISO, end = endISO;
+  const range = await erddapTimeRange(src);
+  if (range) {
+    if (start < range.min) start = range.min;
+    if (end > range.max) end = range.max;
+    if (start > end) return []; // requested window is entirely outside coverage
+  }
+  const days = Math.max(1, (Date.parse(end) - Date.parse(start)) / 86400000);
+  // Stride the time index to ~120 points. Point time-series extraction from daily
+  // grids is very slow server-side (≈1 file read per time step), so fewer steps =
+  // far faster: a 1-year daily CRW query drops from ~50 s to ~2 s with no visible
+  // loss on a ~290 px chart. `cadence` = the grid's native day-spacing.
+  const TARGET = 120;
+  const stride = Math.max(1, Math.round((days / (src.cadence || 1)) / TARGET));
+  const alt = src.alt ? '%5B0%5D' : '';
+  const url = `${src.base}/griddap/${src.dataset}.json?${src.var}%5B(${start}):${stride}:(${end})%5D${alt}%5B(${lat})%5D%5B(${lng})%5D`;
+  const t = (await _erddapJson(src, url)).table;
+  const ti = t.columnNames.indexOf('time'), vi = t.columnNames.indexOf(src.var);
+  return t.rows.map((row) => ({ t: Date.parse(row[ti]), v: row[vi] })).filter((p) => p.v != null);
+}
+function drawTrend(series, cfg, note) {
+  const cv = trendCanvas, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  if (!series.length) { trendMeta.textContent = 'No valid data at this point for this span.'; return; }
+  series.sort((a, b) => a.t - b.t);
+  const pad = { l: 40, r: 8, t: 8, b: 18 };
+  const ts = series.map((p) => p.t), vs = series.map((p) => p.v);
+  const tmin = Math.min(...ts), tmax = Math.max(...ts);
+  let vmin = Math.min(...vs), vmax = Math.max(...vs);
+  if (vmin === vmax) { vmin -= 1; vmax += 1; }
+  const X = (t) => pad.l + (t - tmin) / (tmax - tmin || 1) * (W - pad.l - pad.r);
+  const Y = (v) => H - pad.b - (v - vmin) / (vmax - vmin || 1) * (H - pad.t - pad.b);
+  ctx.strokeStyle = '#31436a'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H - pad.b); ctx.lineTo(W - pad.r, H - pad.b); ctx.stroke();
+  if (vmin < 0 && vmax > 0) { // zero line for anomaly layers
+    ctx.strokeStyle = '#46608f'; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(0)); ctx.lineTo(W - pad.r, Y(0)); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.fillStyle = '#9fb0c8'; ctx.font = '9px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(vmax.toFixed(2), pad.l - 3, pad.t + 7);
+  ctx.fillText(vmin.toFixed(2), pad.l - 3, H - pad.b);
+  ctx.textAlign = 'left'; ctx.fillText(new Date(tmin).toISOString().slice(0, 7), pad.l, H - 5);
+  ctx.textAlign = 'right'; ctx.fillText(new Date(tmax).toISOString().slice(0, 7), W - pad.r, H - 5);
+  ctx.strokeStyle = '#7db3ff'; ctx.lineWidth = 1.5; ctx.beginPath();
+  series.forEach((p, i) => { const x = X(p.t), y = Y(p.v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+  const last = series[series.length - 1];
+  trendMeta.textContent = `${series.length} pts · latest ${last.v.toFixed(2)} ${cfg.unit}` + (note ? ' · ' + note : '');
+}
+// Value at a single date/point — for the marker's "current condition" label.
+async function fetchPointValue(cfg, date, lat, lng, span = 1) {
+  if (cfg.kind === 'erddap') {
+    const r = await fetch(`${ERDDAP}/griddap/${cfg.dataset}.json?${cfg.var}%5B(${date})%5D%5B(${lat})%5D%5B(${lng})%5D`);
+    if (!r.ok) return null;
+    const t = (await r.json()).table, vi = t.columnNames.indexOf(cfg.var);
+    return t.rows.length ? t.rows[0][vi] : null;
+  }
+  if (!cfg.palette) return null;
+  // Read the exact pixel under the point (radius 0) so the marker matches the
+  // map at that spot — no spatial box, no hidden temporal window.
+  if (span > 1) {
+    // Average the same window the map composites (the `span` days up to `date`).
+    const vals = (await Promise.all(dayWindow(date, span, cfg.start).map((d) => sampleTile(cfg, d, lat, lng, 0)))).filter((v) => v != null);
+    if (!vals.length) return null;
+    const sum = vals.reduce((a, v) => a + (cfg.log ? Math.log(v) : v), 0);
+    return cfg.log ? Math.exp(sum / vals.length) : sum / vals.length;
+  }
+  return sampleTile(cfg, date, lat, lng, 0);
+}
+function fmtPoint(cfg, v) {
+  if (v == null) return 'no data here';
+  if (cfg.var === 'CRW_BAA') return ['No stress', 'Watch', 'Warning', 'Alert 1', 'Alert 2'][Math.round(v)] || ('level ' + Math.round(v));
+  // Tile-decoded values saturate at the colour-scale ends — flag with > / <.
+  let pre = '';
+  if (cfg.palette) {
+    if (v >= cfg.palette.max) { pre = '>'; v = cfg.palette.max; }
+    else if (v <= cfg.palette.min) { pre = '<'; v = cfg.palette.min; }
+  }
+  const sign = (!pre && /anomaly/i.test(cfg.legendTitle || '') && v >= 0) ? '+' : '';
+  const dp = cfg.unit === 'mg/m³' ? 2 : (cfg.unit === '°C' || cfg.unit === '°C-wk') ? 1 : 2;
+  return pre + sign + v.toFixed(dp) + (cfg.unit ? ' ' + cfg.unit : '');
+}
+// Marker label in compare mode: the A-vs-B change at the point.
+function fmtDiff(cfg, a, b) {
+  if (a == null || b == null) return 'no data here';
+  if (cfg.compare === 'ratio') {
+    const f = a / b;
+    return (f >= 1 ? '×' + f.toFixed(2) : '÷' + (1 / f).toFixed(2)) + ' (A/B)';
+  }
+  return (a - b >= 0 ? '+' : '−') + Math.abs(a - b).toFixed(1) + ' °C (A−B)';
+}
+function setMarkerLabel(text) {
+  if (!trendMarker) return;
+  if (trendMarker.getTooltip()) trendMarker.setTooltipContent(text);
+  else trendMarker.bindTooltip(text, { permanent: true, direction: 'right', offset: [8, 0], className: 'pt-tip' }).openTooltip();
+  if (!trendOnEl.checked) trendMeta.textContent = text; // mirror the value into the panel when the chart is off
+}
+
+// Debounce (spare the data servers on rapid clicks/edits) + cache (instant re-clicks).
+let trendTimer = null;
+const seriesCache = new Map(), pointCache = new Map();
+function scheduleTrend() { if (!trendPt) return; clearTimeout(trendTimer); trendTimer = setTimeout(showTrend, 300); }
+function placeMarker(latlng) {
+  if (trendMarker) trendMarker.setLatLng(latlng);
+  else trendMarker = L.circleMarker(latlng, { radius: 5, color: '#fff', weight: 2, fillColor: '#7db3ff', fillOpacity: 1, interactive: false }).addTo(map);
+  trendHint.style.display = 'none'; trendEl.style.display = '';
+}
+function clampTrendDates() {
+  const lo = layerCfg().start, hi = latestDate();
+  for (const el of [trendStartEl, trendEndEl]) { el.min = lo; el.max = hi; }
+  if (trendStartEl.value && trendStartEl.value < lo) trendStartEl.value = lo;
+  if (trendEndEl.value && trendEndEl.value > hi) trendEndEl.value = hi;
+}
+
+async function showTrend() {
+  if (!trendPt) return;
+  const cfg = layerCfg(), id = layerEl.value;
+  placeMarker(trendPt);
+  const lat = Math.max(-89.9, Math.min(89.9, trendPt.lat));
+  const lng = ((trendPt.lng + 180) % 360 + 360) % 360 - 180; // normalise to −180..180
+  trendTitle.textContent = `@ ${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+  const seq = ++trendSeq;
+
+  // Marker reading. In compare mode → the A-vs-B change at the point; otherwise
+  // the "current condition" at the selected date, averaged over the same window
+  // as the Averaging setting (single day / 7 / 30 days).
+  const predicting = cfg.predict && predictEl.checked && analogYearEl.value && predictDateEl.value;
+  const ds = predicting ? { on: false } : diffState(cfg);
+  const comparing = ds.on;
+  const span = cfg.avg ? parseInt(avgEl.value, 10) : 1;
+  setMarkerLabel('…');
+  if (predicting) {
+    const ad = analogDates(dateEl.value, predictDateEl.value, analogYearEl.value); // A + (C − B)
+    const pKey = `pred|${id}|${lat.toFixed(2)}|${lng.toFixed(2)}|${ad.A}|${ad.B}|${ad.C}`;
+    (pointCache.has(pKey) ? Promise.resolve(pointCache.get(pKey))
+      : Promise.all([fetchPointValue(cfg, ad.A, lat, lng, 1), fetchPointValue(cfg, ad.B, lat, lng, 1), fetchPointValue(cfg, ad.C, lat, lng, 1)]).then((abc) => { pointCache.set(pKey, abc); return abc; }))
+      .then((abc) => { if (seq !== trendSeq) return; const a = abc[0], b = abc[1], c = abc[2]; setMarkerLabel((a == null || b == null || c == null) ? 'no data here' : fmtPoint(cfg, a + (c - b)) + ' → ' + predictDateEl.value); })
+      .catch(() => { if (seq === trendSeq) setMarkerLabel('no data here'); });
+  } else if (comparing) {
+    const suffix = ds.change > 0 ? ` over last ${ds.change} days` : '';
+    const pKey = `diff|${id}|${lat.toFixed(2)}|${lng.toFixed(2)}|${dateEl.value}|${ds.dateB}|${span}`;
+    (pointCache.has(pKey) ? Promise.resolve(pointCache.get(pKey))
+      : Promise.all([fetchPointValue(cfg, dateEl.value, lat, lng, span), fetchPointValue(cfg, ds.dateB, lat, lng, span)]).then((ab) => { pointCache.set(pKey, ab); return ab; }))
+      .then((ab) => { if (seq === trendSeq) setMarkerLabel(fmtDiff(cfg, ab[0], ab[1]) + (ab[0] != null && ab[1] != null ? suffix : '')); })
+      .catch(() => { if (seq === trendSeq) setMarkerLabel('no data here'); });
+  } else {
+    const mDate = dateEl.value || latestDate();
+    const suffix = span > 1 ? ` · ${span}-day avg` : '';
+    const pKey = `${id}|${lat.toFixed(2)}|${lng.toFixed(2)}|${mDate}|${span}`;
+    (pointCache.has(pKey) ? Promise.resolve(pointCache.get(pKey))
+      : fetchPointValue(cfg, mDate, lat, lng, span).then((v) => { pointCache.set(pKey, v); return v; }))
+      .then((v) => { if (seq === trendSeq) setMarkerLabel(fmtPoint(cfg, v) + (v != null ? suffix : '')); })
+      .catch(() => { if (seq === trendSeq) setMarkerLabel('no data here'); });
+  }
+
+  // Trend chart is optional — when off, keep the marker value but skip the heavy
+  // time-series load. The value is mirrored into the panel via setMarkerLabel.
+  const chartOn = trendOnEl.checked;
+  trendCanvas.style.display = chartOn ? '' : 'none';
+  trendDatesEl.style.display = chartOn ? '' : 'none';
+  if (!chartOn) return;
+
+  trendCanvas.getContext('2d').clearRect(0, 0, trendCanvas.width, trendCanvas.height);
+  if (cfg.trend === 'none') { trendMeta.textContent = 'Trend not available for this layer — try chlorophyll, SST, or a Coral Reef Watch layer.'; return; }
+
+  let s = trendStartEl.value, e = trendEndEl.value;
+  if (s && s < cfg.start) s = cfg.start;
+  if (!s || !e || s > e) { trendMeta.textContent = 'Set a valid From / To date range.'; return; }
+  const src = seriesSource(cfg);
+  const sKey = `${id}|${lat.toFixed(2)}|${lng.toFixed(2)}|${s}|${e}`;
+  trendMeta.textContent = 'Loading…';
+  try {
+    let series = seriesCache.get(sKey);
+    if (!series) {
+      if (src) series = await fetchErddapSeries(src, lat, lng, s, e);
+      else { series = await fetchTileSeries(cfg, lat, lng, s, e); if (cfg.gappy && series.length > 2) series = smoothSeries(series, 2, cfg.log); }
+      seriesCache.set(sKey, series);
+    }
+    if (seq !== trendSeq) return; // a newer request superseded this one
+    const note = src ? (src.jsonp ? 'VIIRS L3 4 km · NOAA' : 'L3 data') : (cfg.gappy ? 'spatial + rolling avg' : '');
+    drawTrend(series, cfg, note);
+  } catch (err) {
+    if (seq === trendSeq) trendMeta.textContent = 'Trend data server unavailable — try again shortly.';
+  }
+}
+map.on('click', (e) => { trendPt = e.latlng; placeMarker(e.latlng); scheduleTrend(); });
+trendStartEl.addEventListener('change', scheduleTrend);
+trendEndEl.addEventListener('change', scheduleTrend);
+trendOnEl.addEventListener('change', () => { if (trendPt) showTrend(); });
+document.getElementById('trend-close').addEventListener('click', () => {
+  trendPt = null; trendEl.style.display = 'none'; trendHint.style.display = '';
+  if (trendMarker) { map.removeLayer(trendMarker); trendMarker = null; }
+});
+
+dateEl.value = latestDate();
+// Default trend range: one year before present → present.
+trendEndEl.value = latestDate();
+{ const d = new Date(latestDate() + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() - 1); trendStartEl.value = d.toISOString().slice(0, 10); }
+clampDate();
+updateLayer();
+</script>
+
+<!-- Cloudflare Web Analytics — replace YOUR_TOKEN_HERE with the token from
+     Cloudflare dashboard → Analytics & Logs → Web Analytics → Add a site.
+     Cookieless, so no consent banner needed. -->
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon='{"token": "YOUR_TOKEN_HERE"}'></script>
+</body>
+</html>
