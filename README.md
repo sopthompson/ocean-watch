@@ -12,8 +12,11 @@ keys. Just open it or upload it anywhere that serves static files.
 - **Sensors:** MODIS-Aqua (2002–), VIIRS NOAA-20 (2017–), PACE OCI (2024–), via NASA GIBS.
 - **More layers:** sea-surface temperature & anomaly (GHRSST/MUR), NOAA Coral Reef
   Watch (SST, DHW, bleaching alerts), significant wave height (WaveWatch III,
-  2017–), and ocean depth / bathymetry (SRTM30+, static). Wave & depth layers are
-  ERDDAP WMS via PacIOOS — display + click-for-value, no in-browser averaging.
+  2017–), and ocean depth / bathymetry (SRTM30+).
+  - *Ocean depth* is **stored locally** (`assets/bathymetry*.png`, ~0.2° global
+    grid, ~4 MB) — paints instantly with no server; click any point for depth.
+  - *Wave height* map tiles come from PacIOOS ERDDAP (sometimes offline); point
+    values + trends always work, sourced from the global WaveWatch III model.
 - **Averaging:** single day, or weekly / monthly composites computed in the
   browser (per-pixel geometric mean of the cloud-free days), which fills gaps
   from clouds and missing passes.

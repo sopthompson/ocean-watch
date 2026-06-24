@@ -273,10 +273,11 @@ const LAYERS = {
     cap: 'Degree Heating Weeks (°C-weeks): accumulated heat stress. ≥4 → bleaching likely, ≥8 → severe / mortality risk.' },
   'crw-baa': { group: 'Coral Reef Watch (NOAA)', label: 'Coral bleaching alert area', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_BAA', start: '1985-04-01', legendTitle: 'Bleaching Alert Area (0–4)', unit: 'level', avg: false, compare: 'none', trend: 'erddap',
     cap: 'Bleaching Alert Area category: No Stress → Watch → Warning → Alert 1 → Alert 2.' },
-  'waves': { group: 'Waves', label: 'Significant wave height — WaveWatch III', kind: 'erddap', dataset: 'ww3_global_lon180', var: 'Thgt', zLevel: '0.0', start: '2017-01-01', legendTitle: 'Significant wave height (m)', unit: 'm', avg: false, compare: 'none', trend: 'erddap', cadence: 0.125, attr: 'WaveWatch III © NOAA/NCEP via PacIOOS',
-    cap: 'NOAA WaveWatch III significant wave height (m) — combined sea + swell, global ~0.5° model. 3-hourly, 2017–present (the last few days are forecast). Display + point values; averaging/difference not available.' },
-  'bathymetry': { group: 'Sea floor', label: 'Ocean depth — SRTM30+', kind: 'erddap', dataset: 'srtm30plus_v11_bathy', var: 'elev', static: true, start: '2017-01-01', legendTitle: 'Sea-floor elevation (m; negative = below sea level)', unit: 'm', dp: 0, avg: false, compare: 'none', trend: 'none', attr: 'SRTM30+ (Becker et al.) via PacIOOS',
-    cap: 'SRTM30+ global sea-floor elevation (m), ~1 km. Negative = depth below sea level; land clamps to the top of the scale. Static — date and averaging do not apply.' }
+  'waves': { group: 'Waves', label: 'Significant wave height — WaveWatch III', kind: 'erddap', dataset: 'ww3_global_lon180', var: 'Thgt', zLevel: '0.0', pointDataset: 'ww3_global', pointLon360: true, start: '2017-01-01', legendTitle: 'Significant wave height (m)', unit: 'm', avg: false, compare: 'none', trend: 'erddap', cadence: 1 / 24, attr: 'WaveWatch III © NOAA/NCEP via PacIOOS',
+    tileNote: 'WaveWatch map tiles are unavailable from PacIOOS right now — click any point to read wave height (works back to 2017).',
+    cap: 'NOAA WaveWatch III significant wave height (m) — combined sea + swell, global 0.5° (~50 km) model, 77.5°S–77.5°N. Hourly, 2017–present (last few days are forecast). Map tiles come from PacIOOS and are sometimes offline; point values + trends always work. Averaging/difference not available.' },
+  'bathymetry': { group: 'Sea floor', label: 'Ocean depth — SRTM30+', kind: 'local', img: 'assets/bathymetry.png', data: 'assets/bathymetry-depth.png', legendImg: 'assets/bathymetry-legend.png', static: true, start: '2017-01-01', legendTitle: 'Sea-floor depth (m below sea level)', unit: 'm', dp: 0, avg: false, compare: 'none', trend: 'none', attr: 'SRTM30+ (Becker et al.), stored locally',
+    cap: 'SRTM30+ global sea-floor depth (m), stored locally as a ~0.2° (~22 km) grid — paints instantly with no server. Depths are approximate near coasts and islands; land is transparent. Static — date and averaging do not apply.' }
 };
 
 function latestDate() {
@@ -634,12 +635,17 @@ function updateLayer() {
   legendImg.style.display = diffMode ? 'none' : '';
   diffLeg.style.display = diffMode ? '' : 'none';
 
-  if (cfg.kind === 'erddap') {
+  if (cfg.kind === 'local') {
+    // Fully offline layer (bathymetry): one static colour image + a preloaded depth grid for clicks.
+    chlLayer = L.imageOverlay(cfg.img, [[-90, -180], [90, 180]], { opacity: 0.92, zIndex: 10, crossOrigin: 'anonymous' });
+    loadBathy(cfg.data);
+    legendImg.src = cfg.legendImg;
+  } else if (cfg.kind === 'erddap') {
     chlLayer = erddapLayer(cfg, date); // CRW can't be repainted client-side; map stays at anchor date
     statusEl.textContent = `Loading ${cfg.label}…`;
     let errors = 0;
     chlLayer.on('tileerror', () => {
-      if (++errors >= 4) statusEl.textContent = 'Data server slow or unavailable — try again shortly.';
+      if (++errors >= 4) statusEl.textContent = cfg.tileNote || 'Data server slow or unavailable — try again shortly.';
     });
     chlLayer.on('load', () => { statusEl.textContent = ''; });
     legendImg.src = erddapLegend(cfg);
@@ -729,7 +735,9 @@ function updateLabels() {
       : 'Use weekly/monthly averaging to fill gaps and compare seasons or years.';
   } else {
     legendCap.textContent = cfg.cap + (cfg.avg && span > 1 ? ` Averaged over ${span} days (per-pixel ${cfg.log ? 'geometric' : ''} mean).` : '');
-    noteEl.innerHTML = cfg.kind === 'erddap'
+    noteEl.innerHTML = cfg.kind === 'local'
+      ? 'Stored locally — instant, works offline. Click any point to read depth.'
+      : cfg.kind === 'erddap'
       ? 'Source: NOAA Coral Reef Watch 5 km, daily, 1985–present (via PacIOOS ERDDAP).'
       : 'Gaps = clouds / no pass. Zoom in for faster averaging — wide views fetch many tiles.';
   }
@@ -839,6 +847,31 @@ function loadImg(url) {
     im.onload = () => res(im); im.onerror = () => res(null); im.src = url;
   });
 }
+// ---- Offline bathymetry: load the depth grid once, sample it per click -----
+// Equirectangular RGBA PNG: depth (metres below sea level) = R*256 + G; alpha 0 = land/no-data.
+let _bathy = null, _bathyPromise = null;
+function loadBathy(url) {
+  if (_bathy) return Promise.resolve(_bathy);
+  if (!_bathyPromise) _bathyPromise = new Promise((res) => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0);
+      _bathy = { w: img.width, h: img.height, d: x.getImageData(0, 0, img.width, img.height).data };
+      res(_bathy);
+    };
+    img.onerror = () => res(null);
+    img.src = url;
+  });
+  return _bathyPromise;
+}
+function bathyDepth(b, lat, lng) {
+  const x = Math.min(b.w - 1, Math.max(0, Math.floor((lng + 180) / 360 * b.w)));
+  const y = Math.min(b.h - 1, Math.max(0, Math.floor((90 - lat) / 180 * b.h)));
+  const i = (y * b.w + x) * 4;
+  if (b.d[i + 3] === 0) return null;            // land / no data
+  return b.d[i] * 256 + b.d[i + 1];             // metres below sea level (positive)
+}
 // Pixel within the GIBS 4326 tile grid (512 px tiles, 0.5625°/px at z0).
 function lonLatToTile(lon, lat, z) {
   const res = 0.5625 / Math.pow(2, z);
@@ -917,7 +950,7 @@ function jsonpGet(url) {
 // or null for tile-sampled layers (SST).
 function seriesSource(cfg) {
   if (cfg.trendErddap) return cfg.trendErddap;                                  // chlorophyll → CoastWatch L3 (JSONP)
-  if (cfg.kind === 'erddap') return { base: ERDDAP, dataset: cfg.dataset, var: cfg.var, alt: !!cfg.zLevel, jsonp: false, cadence: cfg.cadence || 1, note: cfg.attr ? cfg.attr.split(' via ')[0] : '' }; // PacIOOS griddap (alt = pin depth level for waves)
+  if (cfg.kind === 'erddap') return { base: ERDDAP, dataset: cfg.pointDataset || cfg.dataset, var: cfg.var, alt: !!cfg.zLevel, lon360: !!cfg.pointLon360, jsonp: false, cadence: cfg.cadence || 1, note: cfg.attr ? cfg.attr.split(' via ')[0] : '' }; // PacIOOS griddap (alt = pin depth level for waves)
   return null;
 }
 
@@ -954,7 +987,8 @@ async function fetchErddapSeries(src, lat, lng, startISO, endISO) {
   const TARGET = 120;
   const stride = Math.max(1, Math.round((days / (src.cadence || 1)) / TARGET));
   const alt = src.alt ? '%5B0%5D' : '';
-  const url = `${src.base}/griddap/${src.dataset}.json?${src.var}%5B(${start}):${stride}:(${end})%5D${alt}%5B(${lat})%5D%5B(${lng})%5D`;
+  const qlng = src.lon360 && lng < 0 ? lng + 360 : lng;       // 0–360° datasets (e.g. ww3_global)
+  const url = `${src.base}/griddap/${src.dataset}.json?${src.var}%5B(${start}):${stride}:(${end})%5D${alt}%5B(${lat})%5D%5B(${qlng})%5D`;
   const t = (await _erddapJson(src, url)).table;
   const ti = t.columnNames.indexOf('time'), vi = t.columnNames.indexOf(src.var);
   return t.rows.map((row) => ({ t: Date.parse(row[ti]), v: row[vi] })).filter((p) => p.v != null);
@@ -991,9 +1025,15 @@ function drawTrend(series, cfg, note) {
 }
 // Value at a single date/point — for the marker's "current condition" label.
 async function fetchPointValue(cfg, date, lat, lng, span = 1) {
+  if (cfg.kind === 'local') {
+    const b = await loadBathy(cfg.data);
+    return b ? bathyDepth(b, lat, lng) : null;
+  }
   if (cfg.kind === 'erddap') {
-    const sel = (cfg.static ? '' : `%5B(${date})%5D`) + (cfg.zLevel != null ? `%5B(${cfg.zLevel})%5D` : '') + `%5B(${lat})%5D%5B(${lng})%5D`;
-    const r = await fetch(`${ERDDAP}/griddap/${cfg.dataset}.json?${cfg.var}${sel}`);
+    const pds = cfg.pointDataset || cfg.dataset;            // some display datasets differ from the queryable one
+    const qlng = cfg.pointLon360 && lng < 0 ? lng + 360 : lng; // 0–360° datasets (e.g. ww3_global)
+    const sel = (cfg.static ? '' : `%5B(${date})%5D`) + (cfg.zLevel != null ? `%5B(${cfg.zLevel})%5D` : '') + `%5B(${lat})%5D%5B(${qlng})%5D`;
+    const r = await fetch(`${ERDDAP}/griddap/${pds}.json?${cfg.var}${sel}`);
     if (!r.ok) return null;
     const t = (await r.json()).table, vi = t.columnNames.indexOf(cfg.var);
     return t.rows.length ? t.rows[0][vi] : null;
