@@ -1046,6 +1046,13 @@ async function fetchErddapSeries(src, lat, lng, startISO, endISO) {
   const ti = t.columnNames.indexOf('time'), vi = t.columnNames.indexOf(src.var);
   return t.rows.map((row) => ({ t: Date.parse(row[ti]), v: row[vi] })).filter((p) => p.v != null);
 }
+// "nice" round tick values spanning [lo,hi] (~target divisions) for axis labels.
+function axisTicks(lo, hi, target) {
+  const span = (hi - lo) || 1, raw = span / target, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return { ticks: out, dp: step < 1 ? (step < 0.1 ? 2 : 1) : 0 };
+}
 function drawTrend(series, cfg, note) {
   const cv = trendCanvas, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
@@ -1064,11 +1071,13 @@ function drawTrend(series, cfg, note) {
     ctx.strokeStyle = '#46608f'; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(pad.l, Y(0)); ctx.lineTo(W - pad.r, Y(0)); ctx.stroke(); ctx.setLineDash([]);
   }
-  ctx.fillStyle = '#9fb0c8'; ctx.font = '9px sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillText(vmax.toFixed(2), pad.l - 3, pad.t + 7);
-  ctx.fillText(vmin.toFixed(2), pad.l - 3, H - pad.b);
-  ctx.textAlign = 'left'; ctx.fillText(new Date(tmin).toISOString().slice(0, 7), pad.l, H - 5);
+  ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
+  const yt = axisTicks(vmin, vmax, 4);
+  for (const tv of yt.ticks) { const y = Y(tv); if (y < pad.t - 1 || y > H - pad.b + 1) continue;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillStyle = '#9fb0c8'; ctx.fillText(tv.toFixed(yt.dp), pad.l - 3, y + 3); }
+  ctx.fillStyle = '#7e8eaa'; ctx.textAlign = 'left'; ctx.fillText(cfg.unit || '', pad.l + 1, pad.t + 7);
+  ctx.fillStyle = '#9fb0c8'; ctx.fillText(new Date(tmin).toISOString().slice(0, 7), pad.l, H - 5);
   ctx.textAlign = 'right'; ctx.fillText(new Date(tmax).toISOString().slice(0, 7), W - pad.r, H - 5);
   ctx.strokeStyle = '#7db3ff'; ctx.lineWidth = 1.5; ctx.beginPath();
   series.forEach((p, i) => { const x = X(p.t), y = Y(p.v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
@@ -1116,6 +1125,11 @@ function drawSeasonalPlume(data) {
   const bw = Math.min(28, (W - pad.l - pad.r) / n * 0.5);
   const X = k => pad.l + bw / 2 + (n === 1 ? 0 : k / (n - 1)) * (W - pad.l - pad.r - bw);
   const Y = v => H - pad.b - (v - vmin) / (vmax - vmin) * (H - pad.t - pad.b);
+  // y gridlines + tick labels
+  const yt = axisTicks(vmin, vmax, 4); ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
+  for (const tv of yt.ticks) { const y = Y(tv); if (y < pad.t - 1 || y > H - pad.b + 1) continue;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillStyle = '#9fb0c8'; ctx.fillText(tv.toFixed(yt.dp), pad.l - 3, y + 3); }
   // trend line through monthly medians
   ctx.strokeStyle = 'rgba(255,209,102,0.45)'; ctx.lineWidth = 1.5; ctx.beginPath();
   months.forEach((m, k) => { const x = X(k), y = Y(q(m.vals, .5)); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
@@ -1130,9 +1144,8 @@ function drawSeasonalPlume(data) {
   });
   // axes + labels
   ctx.strokeStyle = '#31436a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H - pad.b); ctx.lineTo(W - pad.r, H - pad.b); ctx.stroke();
-  ctx.fillStyle = '#9fb0c8'; ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
-  ctx.fillText(vmax.toFixed(1), pad.l - 3, pad.t + 7); ctx.fillText(vmin.toFixed(1), pad.l - 3, H - pad.b);
-  ctx.textAlign = 'center'; months.forEach((m, k) => ctx.fillText(m.label, X(k), H - 5));
+  ctx.fillStyle = '#7e8eaa'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('°C', pad.l + 1, pad.t + 7);
+  ctx.fillStyle = '#9fb0c8'; ctx.textAlign = 'center'; months.forEach((m, k) => ctx.fillText(m.label, X(k), H - 5));
   const end = months[months.length - 1];
   trendMeta.textContent = `SEAS5 monthly SST · ${data.members.length} members · ~${q(end.vals, .5).toFixed(1)} °C in ${end.label} (box 25–75%, whisker 10–90%)`;
 }
