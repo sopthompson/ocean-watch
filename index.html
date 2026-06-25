@@ -178,6 +178,13 @@
       <label for="trend-start">From<input type="date" id="trend-start"></label>
       <label for="trend-end">To<input type="date" id="trend-end"></label>
     </div>
+    <div class="trend-dates" id="seasonal-controls" style="display:none">
+      <label for="seasonal-months">Outlook<select id="seasonal-months">
+        <option value="3">3 months</option>
+        <option value="6" selected>6 months</option>
+        <option value="7">7 months (max)</option>
+      </select></label>
+    </div>
   </div>
 
   <div class="note" id="note"></div>
@@ -185,7 +192,7 @@
   <details class="credits">
     <summary>Credits &amp; methods</summary>
     <div class="credits-body">
-      <p><strong>Data sources.</strong> We acknowledge the use of imagery provided by NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS): chlorophyll-<em>a</em> (MODIS-Aqua, VIIRS NOAA-20/SNPP, PACE OCI; processed by the NASA Ocean Biology Processing Group, OB.DAAC) and GHRSST MUR sea-surface-temperature. Basemap, coastlines and labels: NASA GIBS. Coral Reef Watch products — SST, SST anomaly, Degree Heating Weeks and Bleaching Alert Area — from <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (5 km, 1985–present). Significant wave height from the NOAA/NCEP <strong>WaveWatch III</strong> global model (2017–present, incl. short-range forecast); sea-floor depth from <strong>SRTM30+</strong> global bathymetry (Becker et al., ~1 km). Coral Reef Watch, WaveWatch III and SRTM30+ are served via the <a href="https://www.pacioos.hawaii.edu" target="_blank" rel="noopener">PacIOOS</a> ERDDAP.</p>
+      <p><strong>Data sources.</strong> We acknowledge the use of imagery provided by NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS): chlorophyll-<em>a</em> (MODIS-Aqua, VIIRS NOAA-20/SNPP, PACE OCI; processed by the NASA Ocean Biology Processing Group, OB.DAAC) and GHRSST MUR sea-surface-temperature. Basemap, coastlines and labels: NASA GIBS. Coral Reef Watch products — SST, SST anomaly, Degree Heating Weeks and Bleaching Alert Area — from <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (5 km, 1985–present). Significant wave height from the NOAA/NCEP <strong>WaveWatch III</strong> global model (2017–present, incl. short-range forecast); sea-floor depth from <strong>SRTM30+</strong> global bathymetry (Becker et al., ~1 km). Coral Reef Watch, WaveWatch III and SRTM30+ are served via the <a href="https://www.pacioos.hawaii.edu" target="_blank" rel="noopener">PacIOOS</a> ERDDAP. The seasonal SST outlook is the ECMWF <strong>SEAS5</strong> seasonal forecast (51-member ensemble, ~7 months) served as a point time series by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.</p>
       <p><strong>Averaging &amp; differences.</strong> For NASA imagery layers, weekly/monthly averages and date-to-date differences are computed in your browser by decoding each pixel from the fixed colour scale — chlorophyll as a geometric mean / log-ratio, SST as a mean / °C difference. These are derived from colour-coded tiles, not source data values.</p>
       <p><strong>Trends.</strong> Clicking a point charts a time series there. Chlorophyll trends use gap-filled VIIRS Science-Quality Level-3 data (NOAA CoastWatch, 4 km); Coral Reef Watch trends use NOAA CRW gridded values (via PacIOOS); SST trends are sampled from the map tiles. The marker value reflects the displayed imagery at the selected date.</p>
       <p><strong>Limitations.</strong> Intended for visualization and education — not quantitative or navigational use. For research-grade values use <a href="https://giovanni.gsfc.nasa.gov" target="_blank" rel="noopener">NASA Giovanni</a>, <a href="https://oceancolor.gsfc.nasa.gov" target="_blank" rel="noopener">NASA Ocean Color</a>, or <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> directly.</p>
@@ -263,6 +270,8 @@ const LAYERS = {
     cap: 'NASA GIBS chlorophyll-a (mg/m³, log scale). White = clouds / no pass.' },
   'sst': { group: 'Sea surface temperature', label: 'SST — GHRSST', kind: 'gibs', gibs: 'GHRSST_L4_MUR_Sea_Surface_Temperature', sstTiles: true, start: '1981-09-01', legend: LEG + '/GHRSST_Sea_Surface_Temperature_H.svg', legendTitle: 'Sea surface temperature (°C)', unit: '°C', palette: SST, log: false, avg: true, compare: 'diff', diffK: 3, trend: 'tile', predict: true,
     cap: 'GHRSST sea surface temperature (°C). MUR 1 km from 2002; AVHRR-OI 0.25° before that — back to 1981.' },
+  'sst-seasonal': { group: 'Sea surface temperature', label: 'Seasonal SST outlook — SEAS5', kind: 'gibs', gibs: 'GHRSST_L4_MUR_Sea_Surface_Temperature', sstTiles: true, start: '1981-09-01', legend: LEG + '/GHRSST_Sea_Surface_Temperature_H.svg', legendTitle: 'Sea surface temperature (°C)', unit: '°C', palette: SST, log: false, avg: false, compare: 'none', trend: 'seasonal', seasonal: true,
+    cap: 'Map = current SST (GHRSST). Click any ocean point for the ECMWF SEAS5 seasonal outlook — 51-member ensemble, daily, out to ~7 months ahead.' },
   'sstanom': { group: 'Sea surface temperature', label: 'SST anomaly — MUR', kind: 'gibs', gibs: 'GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies', start: '2019-07-23', legend: LEG + '/GHRSST_Sea_Surface_Temperature_Anomalies_H.svg', legendTitle: 'SST anomaly (°C)', unit: '°C', palette: SSTANOM, log: false, avg: false, compare: 'none', trend: 'tile',
     cap: 'MUR SST difference from the daily climatology (°C). Red = warmer than normal.' },
   'crw-sst': { group: 'Coral Reef Watch (NOAA)', label: 'SST — CoralTemp 5 km', kind: 'erddap', dataset: 'dhw_5km', var: 'CRW_SST', start: '1985-04-01', legendTitle: 'Sea surface temperature (°C)', unit: '°C', avg: false, compare: 'none', trend: 'erddap',
@@ -581,6 +590,8 @@ const trendStartEl = document.getElementById('trend-start');
 const trendEndEl   = document.getElementById('trend-end');
 const trendOnEl    = document.getElementById('trend-on');
 const trendDatesEl = document.getElementById('trend-dates');
+const seasonalCtl  = document.getElementById('seasonal-controls');
+const seasonalMonthsEl = document.getElementById('seasonal-months');
 
 // Populate the layer dropdown, grouped by variable.
 {
@@ -1065,6 +1076,51 @@ function drawTrend(series, cfg, note) {
   const last = series[series.length - 1];
   trendMeta.textContent = `${series.length} pts · latest ${last.v.toFixed(2)} ${cfg.unit}` + (note ? ' · ' + note : '');
 }
+
+// ---- ECMWF SEAS5 seasonal SST outlook (point ensemble via Open-Meteo) ------
+const SEAS_API = 'https://seasonal-api.open-meteo.com/v1/seasonal';
+const seasCache = new Map();
+async function fetchSeasonalSST(lat, lng, months) {
+  const days = Math.min(214, months * 31);
+  const key = `${lat.toFixed(2)}|${lng.toFixed(2)}|${days}`;
+  if (seasCache.has(key)) return seasCache.get(key);
+  const url = `${SEAS_API}?latitude=${lat}&longitude=${lng}&daily=sea_surface_temperature_mean&forecast_days=${days}`;
+  const d = (await (await fetch(url)).json()).daily || {};
+  const members = [];
+  if (d.sea_surface_temperature_mean) members.push(d.sea_surface_temperature_mean);          // control
+  for (let m = 1; m <= 50; m++) { const k = `sea_surface_temperature_mean_member${String(m).padStart(2, '0')}`; if (d[k]) members.push(d[k]); }
+  const out = { times: (d.time || []).map(s => Date.parse(s + 'T00:00:00Z')), members };
+  seasCache.set(key, out);
+  return out;
+}
+function drawSeasonalPlume(data) {
+  const cv = trendCanvas, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const n = data.times.length;
+  const cols = []; for (let j = 0; j < n; j++) { const v = data.members.map(m => m[j]).filter(x => x != null).sort((a, b) => a - b); cols.push(v.length ? v : null); }
+  let vmin = Infinity, vmax = -Infinity; for (const v of cols) if (v) { vmin = Math.min(vmin, v[0]); vmax = Math.max(vmax, v[v.length - 1]); }
+  if (!n || !isFinite(vmin)) { trendMeta.textContent = 'No sea-surface data here — pick an ocean point.'; return; }
+  if (vmin === vmax) { vmin -= 1; vmax += 1; }
+  const pad = { l: 30, r: 8, t: 8, b: 20 };
+  const X = t => pad.l + (t - data.times[0]) / (data.times[n - 1] - data.times[0] || 1) * (W - pad.l - pad.r);
+  const Y = v => H - pad.b - (v - vmin) / (vmax - vmin) * (H - pad.t - pad.b);
+  const q = (a, p) => { const i = (a.length - 1) * p, b = Math.floor(i), r = i - b; return a[b + 1] !== undefined ? a[b] + r * (a[b + 1] - a[b]) : a[b]; };
+  const band = (pa, pb, col) => { ctx.fillStyle = col; ctx.beginPath();
+    for (let j = 0; j < n; j++) { const s = cols[j]; if (s) ctx.lineTo(X(data.times[j]), Y(q(s, pa))); }
+    for (let j = n - 1; j >= 0; j--) { const s = cols[j]; if (s) ctx.lineTo(X(data.times[j]), Y(q(s, pb))); }
+    ctx.closePath(); ctx.fill(); };
+  band(0, 1, 'rgba(125,179,255,0.15)'); band(0.1, 0.9, 'rgba(125,179,255,0.28)'); band(0.25, 0.75, 'rgba(125,179,255,0.45)');
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1.6; ctx.beginPath();
+  for (let j = 0; j < n; j++) { const s = cols[j]; if (s) { const x = X(data.times[j]), y = Y(q(s, 0.5)); j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } } ctx.stroke();
+  ctx.strokeStyle = '#31436a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H - pad.b); ctx.lineTo(W - pad.r, H - pad.b); ctx.stroke();
+  ctx.fillStyle = '#9fb0c8'; ctx.font = '9px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText(vmax.toFixed(1), pad.l - 3, pad.t + 7); ctx.fillText(vmin.toFixed(1), pad.l - 3, H - pad.b);
+  ctx.textAlign = 'center'; const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; let lm = -1;
+  for (let j = 0; j < n; j++) { const dt = new Date(data.times[j]); if (dt.getUTCDate() === 1 && dt.getUTCMonth() !== lm) { lm = dt.getUTCMonth(); const x = X(data.times[j]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, H - pad.b); ctx.stroke(); ctx.fillStyle = '#9fb0c8'; ctx.fillText(mo[lm], x, H - 6); } }
+  let endMed = null; for (let j = n - 1; j >= 0; j--) if (cols[j]) { endMed = q(cols[j], 0.5); break; }
+  trendMeta.textContent = `SEAS5 SST outlook · ${data.members.length} members · ~${endMed != null ? endMed.toFixed(1) : '?'} °C by ${new Date(data.times[n - 1]).toISOString().slice(0, 7)}`;
+}
 // Value at a single date/point — for the marker's "current condition" label.
 async function fetchPointValue(cfg, date, lat, lng, span = 1) {
   if (cfg.kind === 'local') {
@@ -1118,7 +1174,7 @@ function setMarkerLabel(text) {
   if (!trendMarker) return;
   if (trendMarker.getTooltip()) trendMarker.setTooltipContent(text);
   else trendMarker.bindTooltip(text, { permanent: true, direction: 'right', offset: [8, 0], className: 'pt-tip' }).openTooltip();
-  if (!trendOnEl.checked) trendMeta.textContent = text; // mirror the value into the panel when the chart is off
+  if (!trendOnEl.checked && !layerCfg().seasonal) trendMeta.textContent = text; // mirror value into panel when chart is off (seasonal chart owns the meta)
 }
 
 // Debounce (spare the data servers on rapid clicks/edits) + cache (instant re-clicks).
@@ -1180,12 +1236,20 @@ async function showTrend() {
 
   // Trend chart is optional — when off, keep the marker value but skip the heavy
   // time-series load. The value is mirrored into the panel via setMarkerLabel.
-  const chartOn = trendOnEl.checked;
+  const chartOn = trendOnEl.checked || cfg.seasonal;   // seasonal layer always shows its outlook on click
   trendCanvas.style.display = chartOn ? '' : 'none';
-  trendDatesEl.style.display = chartOn ? '' : 'none';
+  trendDatesEl.style.display = (chartOn && !cfg.seasonal) ? '' : 'none';
+  seasonalCtl.style.display = (chartOn && cfg.seasonal) ? '' : 'none';
   if (!chartOn) return;
 
   trendCanvas.getContext('2d').clearRect(0, 0, trendCanvas.width, trendCanvas.height);
+  if (cfg.seasonal) {
+    const months = parseInt(seasonalMonthsEl.value, 10) || 6;
+    trendMeta.textContent = 'Loading seasonal outlook…';
+    try { const data = await fetchSeasonalSST(lat, lng, months); if (seq === trendSeq) drawSeasonalPlume(data); }
+    catch (e) { if (seq === trendSeq) trendMeta.textContent = 'Seasonal forecast unavailable — try again shortly.'; }
+    return;
+  }
   if (cfg.trend === 'none') { trendMeta.textContent = 'Trend not available for this layer — try chlorophyll, SST, or a Coral Reef Watch layer.'; return; }
 
   let s = trendStartEl.value, e = trendEndEl.value;
@@ -1211,6 +1275,7 @@ async function showTrend() {
 map.on('click', (e) => { trendPt = e.latlng; placeMarker(e.latlng); scheduleTrend(); });
 trendStartEl.addEventListener('change', scheduleTrend);
 trendEndEl.addEventListener('change', scheduleTrend);
+seasonalMonthsEl.addEventListener('change', () => { if (trendPt) showTrend(); });
 trendOnEl.addEventListener('change', () => { if (trendPt) showTrend(); });
 document.getElementById('trend-close').addEventListener('click', () => {
   trendPt = null; trendEl.style.display = 'none'; trendHint.style.display = '';
