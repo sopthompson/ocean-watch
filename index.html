@@ -1122,14 +1122,19 @@ function drawSeasonalPlume(data, obsNow) {
     const idx = []; for (let i = 0; i < N; i++) if (mkey[i] === key) idx.push(i);
     const vals = data.members.map(s => { let sum = 0, c = 0; for (const i of idx) if (s[i] != null) { sum += s[i]; c++; } return c ? sum / c + shift : null; })
                              .filter(v => v != null).sort((a, b) => a - b);
-    return { days: idx.length, vals, label: MO[((key % 12) + 12) % 12] };
+    return { key, days: idx.length, vals, label: MO[((key % 12) + 12) % 12] };
   }).filter(m => m.days >= 12 && m.vals.length);   // whole-ish months only
   if (!months.length) { trendMeta.textContent = 'No sea-surface data here — pick an ocean point.'; return; }
   const q = (a, p) => { const i = (a.length - 1) * p, b = Math.floor(i), r = i - b; return a[b + 1] !== undefined ? a[b] + r * (a[b + 1] - a[b]) : a[b]; };
+  // x slots: today's month (a single observed point) + each forecast month (a box)
+  const nowD = new Date(data.times[0]), nowKey = nowD.getUTCFullYear() * 12 + nowD.getUTCMonth();
+  const boxByKey = new Map(months.map(m => [m.key, m]));
+  const keys = [...new Set([...(todayVal != null ? [nowKey] : []), ...months.map(m => m.key)])].sort((a, b) => a - b);
+  const n = keys.length, nowSlot = keys.indexOf(nowKey);
   let vmin = Infinity, vmax = -Infinity; for (const m of months) { vmin = Math.min(vmin, q(m.vals, .05)); vmax = Math.max(vmax, q(m.vals, .95)); }
   if (todayVal != null) { vmin = Math.min(vmin, todayVal); vmax = Math.max(vmax, todayVal); }
   const padv = (vmax - vmin) * 0.12 || 1; vmin -= padv; vmax += padv;
-  const pad = { l: 30, r: 8, t: 8, b: 18 }, n = months.length;
+  const pad = { l: 30, r: 8, t: 8, b: 18 };
   const bw = Math.min(28, (W - pad.l - pad.r) / n * 0.5);
   const X = k => pad.l + bw / 2 + (n === 1 ? 0 : k / (n - 1)) * (W - pad.l - pad.r - bw);
   const Y = v => H - pad.b - (v - vmin) / (vmax - vmin) * (H - pad.t - pad.b);
@@ -1138,30 +1143,30 @@ function drawSeasonalPlume(data, obsNow) {
   for (const tv of yt.ticks) { const y = Y(tv); if (y < pad.t - 1 || y > H - pad.b + 1) continue;
     ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
     ctx.fillStyle = '#9fb0c8'; ctx.fillText(tv.toFixed(yt.dp), pad.l - 3, y + 3); }
-  // trend line through monthly medians
+  // faint reference level at today's value
+  if (todayVal != null) { const y = Y(todayVal); ctx.strokeStyle = 'rgba(230,238,250,0.18)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke(); ctx.setLineDash([]); }
+  // connecting line: today point → monthly medians
   ctx.strokeStyle = 'rgba(255,209,102,0.45)'; ctx.lineWidth = 1.5; ctx.beginPath();
-  months.forEach((m, k) => { const x = X(k), y = Y(q(m.vals, .5)); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
-  // box (25–75) + whisker (10–90) + median per month
-  months.forEach((m, k) => {
-    const x = X(k), p10 = Y(q(m.vals, .1)), p90 = Y(q(m.vals, .9)), p25 = Y(q(m.vals, .25)), p75 = Y(q(m.vals, .75)), p50 = Y(q(m.vals, .5));
+  keys.forEach((key, k) => { const box = boxByKey.get(key), y = box ? Y(q(box.vals, .5)) : Y(todayVal); k ? ctx.lineTo(X(k), y) : ctx.moveTo(X(k), y); }); ctx.stroke();
+  // monthly boxes
+  keys.forEach((key, k) => { const m = boxByKey.get(key); if (!m) return; const x = X(k);
+    const p10 = Y(q(m.vals, .1)), p90 = Y(q(m.vals, .9)), p25 = Y(q(m.vals, .25)), p75 = Y(q(m.vals, .75)), p50 = Y(q(m.vals, .5));
     ctx.strokeStyle = '#7db3ff'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, p90); ctx.lineTo(x, p10); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x - bw / 4, p90); ctx.lineTo(x + bw / 4, p90); ctx.moveTo(x - bw / 4, p10); ctx.lineTo(x + bw / 4, p10); ctx.stroke();
     ctx.fillStyle = 'rgba(125,179,255,0.40)'; ctx.fillRect(x - bw / 2, p75, bw, p25 - p75); ctx.strokeRect(x - bw / 2, p75, bw, p25 - p75);
     ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - bw / 2, p50); ctx.lineTo(x + bw / 2, p50); ctx.stroke();
   });
-  // "today" reference line — observed SST the forecast is anchored to
-  if (todayVal != null) {
-    const y = Y(todayVal);
-    ctx.strokeStyle = 'rgba(230,238,250,0.6)'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#e6eefa'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText(`today ${todayVal.toFixed(1)}°`, pad.l + 3, (y - 3 < pad.t + 6) ? y + 10 : y - 3);
+  // observed "today" point at the current month
+  if (todayVal != null && nowSlot >= 0) { const x = X(nowSlot), y = Y(todayVal);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = '#e6eefa'; ctx.font = '9px sans-serif'; ctx.textAlign = nowSlot === 0 ? 'left' : 'center';
+    ctx.fillText('today', x + (nowSlot === 0 ? 6 : 0), (y - 5 < pad.t + 6) ? y + 13 : y - 5);
   }
   // axes + labels
   ctx.strokeStyle = '#31436a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H - pad.b); ctx.lineTo(W - pad.r, H - pad.b); ctx.stroke();
   ctx.fillStyle = '#7e8eaa'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('°C', pad.l + 1, pad.t + 7);
-  ctx.fillStyle = '#9fb0c8'; ctx.textAlign = 'center'; months.forEach((m, k) => ctx.fillText(m.label, X(k), H - 5));
+  ctx.fillStyle = '#9fb0c8'; ctx.textAlign = 'center'; keys.forEach((key, k) => ctx.fillText(MO[((key % 12) + 12) % 12], X(k), H - 5));
   const end = months[months.length - 1], endMed = q(end.vals, .5);
   trendMeta.textContent = `SEAS5 SST${shift ? ' · anchored to today' : ''} · ${todayVal != null ? todayVal.toFixed(1) : '?'} → ~${endMed.toFixed(1)} °C by ${end.label} · box 25–75/whisker 10–90%`;
 }
