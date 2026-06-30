@@ -180,9 +180,10 @@
     </div>
     <div class="trend-dates" id="seasonal-controls" style="display:none">
       <label for="seasonal-months">Outlook<select id="seasonal-months">
-        <option value="3">3 months</option>
-        <option value="6" selected>6 months</option>
-        <option value="7">7 months (max)</option>
+        <option value="ec46">6 wk · EC46</option>
+        <option value="3">3 mo · SEAS5</option>
+        <option value="6" selected>6 mo · SEAS5</option>
+        <option value="7">7 mo · SEAS5</option>
       </select></label>
     </div>
   </div>
@@ -1089,11 +1090,10 @@ function drawTrend(series, cfg, note) {
 // ---- ECMWF SEAS5 seasonal SST outlook (point ensemble via Open-Meteo) ------
 const SEAS_API = 'https://seasonal-api.open-meteo.com/v1/seasonal';
 const seasCache = new Map();
-async function fetchSeasonalSST(lat, lng, months) {
-  const days = Math.min(214, months * 31);
-  const key = `${lat.toFixed(2)}|${lng.toFixed(2)}|${days}`;
+async function fetchSeasonalSST(lat, lng, days, model) {
+  const key = `${lat.toFixed(2)}|${lng.toFixed(2)}|${days}|${model || 'seamless'}`;
   if (seasCache.has(key)) return seasCache.get(key);
-  const url = `${SEAS_API}?latitude=${lat}&longitude=${lng}&daily=sea_surface_temperature_mean&forecast_days=${days}`;
+  const url = `${SEAS_API}?latitude=${lat}&longitude=${lng}&daily=sea_surface_temperature_mean&forecast_days=${days}${model ? '&models=' + model : ''}`;
   const d = (await (await fetch(url)).json()).daily || {};
   const members = [];
   if (d.sea_surface_temperature_mean) members.push(d.sea_surface_temperature_mean);          // control
@@ -1103,31 +1103,35 @@ async function fetchSeasonalSST(lat, lng, months) {
   return out;
 }
 const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-// Seasonal forecasts have no daily skill — aggregate each member to MONTHLY means
-// and show a month-by-month box-and-whisker of the ensemble (broad trend, not noise).
-function drawSeasonalPlume(data, obsNow) {
+// Aggregate each member to weekly (EC46 near-term) or monthly (SEAS5 seasonal)
+// means — these forecasts have no daily skill — and draw a shaded ensemble plume
+// of the broad trend, anchored to today's observed SST.
+function drawSeasonalPlume(data, obsNow, weekly) {
   const cv = trendCanvas, ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   const N = data.times.length;
   if (!N || !data.members.length) { trendMeta.textContent = 'No sea-surface data here — pick an ocean point.'; return; }
-  // Anchor to today's observed SST: SEAS5 carries its own bias, so shift the whole
-  // forecast so "now" matches observed GHRSST and the boxes show the model's
-  // predicted change from today — a fair, like-for-like presentation.
+  // Anchor to today's observed SST (the model carries its own bias).
   const d0 = data.members.map(s => { for (const v of s) if (v != null) return v; return null; }).filter(v => v != null).sort((a, b) => a - b);
-  const seas5Now = d0.length ? d0[Math.floor((d0.length - 1) / 2)] : null;
-  const shift = (obsNow != null && isFinite(obsNow) && seas5Now != null) ? obsNow - seas5Now : 0;
-  const todayVal = shift ? obsNow : seas5Now;
-  const mkey = data.times.map(t => { const d = new Date(t); return d.getUTCFullYear() * 12 + d.getUTCMonth(); });
-  const months = [...new Set(mkey)].map(key => {
-    const idx = []; for (let i = 0; i < N; i++) if (mkey[i] === key) idx.push(i);
+  const modelNow = d0.length ? d0[Math.floor((d0.length - 1) / 2)] : null;
+  const shift = (obsNow != null && isFinite(obsNow) && modelNow != null) ? obsNow - modelNow : 0;
+  const todayVal = shift ? obsNow : modelNow;
+  const t0 = data.times[0];
+  const binKey = weekly ? (t => Math.floor((t - t0) / (7 * 86400000)))
+                        : (t => { const d = new Date(t); return d.getUTCFullYear() * 12 + d.getUTCMonth(); });
+  const minDays = weekly ? 4 : 12;
+  const labelFor = key => { if (!weekly) return MO[((key % 12) + 12) % 12]; const d = new Date(t0 + key * 7 * 86400000); return `${d.getUTCDate()}/${d.getUTCMonth() + 1}`; };
+  const bkey = data.times.map(binKey);
+  const months = [...new Set(bkey)].map(key => {
+    const idx = []; for (let i = 0; i < N; i++) if (bkey[i] === key) idx.push(i);
     const vals = data.members.map(s => { let sum = 0, c = 0; for (const i of idx) if (s[i] != null) { sum += s[i]; c++; } return c ? sum / c + shift : null; })
                              .filter(v => v != null).sort((a, b) => a - b);
-    return { key, days: idx.length, vals, label: MO[((key % 12) + 12) % 12] };
-  }).filter(m => m.days >= 12 && m.vals.length);   // whole-ish months only
+    return { key, days: idx.length, vals, label: labelFor(key) };
+  }).filter(m => m.days >= minDays && m.vals.length);
   if (!months.length) { trendMeta.textContent = 'No sea-surface data here — pick an ocean point.'; return; }
   const q = (a, p) => { const i = (a.length - 1) * p, b = Math.floor(i), r = i - b; return a[b + 1] !== undefined ? a[b] + r * (a[b + 1] - a[b]) : a[b]; };
-  // x slots: today's month (a single observed point) + each forecast month (a box)
-  const nowD = new Date(data.times[0]), nowKey = nowD.getUTCFullYear() * 12 + nowD.getUTCMonth();
+  // x slots: today's bin (an observed point) + each forecast bin (plume segment)
+  const nowKey = binKey(t0);
   const boxByKey = new Map(months.map(m => [m.key, m]));
   const keys = [...new Set([...(todayVal != null ? [nowKey] : []), ...months.map(m => m.key)])].sort((a, b) => a - b);
   const n = keys.length, nowSlot = keys.indexOf(nowKey);
@@ -1165,9 +1169,9 @@ function drawSeasonalPlume(data, obsNow) {
   // axes + labels
   ctx.strokeStyle = '#31436a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H - pad.b); ctx.lineTo(W - pad.r, H - pad.b); ctx.stroke();
   ctx.fillStyle = '#7e8eaa'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('°C', pad.l + 1, pad.t + 7);
-  ctx.fillStyle = '#9fb0c8'; ctx.textAlign = 'center'; keys.forEach((key, k) => ctx.fillText(MO[((key % 12) + 12) % 12], X(k), H - 5));
+  ctx.fillStyle = '#9fb0c8'; ctx.textAlign = 'center'; keys.forEach((key, k) => ctx.fillText(labelFor(key), X(k), H - 5));
   const end = months[months.length - 1], endMed = q(end.vals, .5);
-  trendMeta.textContent = `SEAS5 SST${shift ? ' · anchored to today' : ''} · ${todayVal != null ? todayVal.toFixed(1) : '?'} → ~${endMed.toFixed(1)} °C by ${end.label} · band 25–75 / 10–90%`;
+  trendMeta.textContent = `${weekly ? 'EC46 near-term' : 'SEAS5'} SST${shift ? ' · anchored to today' : ''} · ${todayVal != null ? todayVal.toFixed(1) : '?'} → ~${endMed.toFixed(1)} °C by ${end.label} · band 25–75 / 10–90%`;
 }
 // Value at a single date/point — for the marker's "current condition" label.
 async function fetchPointValue(cfg, date, lat, lng, span = 1) {
@@ -1292,15 +1296,16 @@ async function showTrend() {
 
   trendCanvas.getContext('2d').clearRect(0, 0, trendCanvas.width, trendCanvas.height);
   if (cfg.seasonal) {
-    const months = parseInt(seasonalMonthsEl.value, 10) || 6;
-    trendMeta.textContent = 'Loading seasonal outlook…';
+    const sel = seasonalMonthsEl.value, weekly = sel === 'ec46';
+    const days = weekly ? 46 : Math.min(214, parseInt(sel, 10) * 31);
+    trendMeta.textContent = 'Loading SST outlook…';
     try {
       const [data, obsNow] = await Promise.all([
-        fetchSeasonalSST(lat, lng, months),
+        fetchSeasonalSST(lat, lng, days, weekly ? 'ecmwf_ec46' : null),
         fetchPointValue(cfg, dateEl.value || latestDate(), lat, lng, 1).catch(() => null)  // observed SST to anchor to
       ]);
-      if (seq === trendSeq) drawSeasonalPlume(data, obsNow);
-    } catch (e) { if (seq === trendSeq) trendMeta.textContent = 'Seasonal forecast unavailable — try again shortly.'; }
+      if (seq === trendSeq) drawSeasonalPlume(data, obsNow, weekly);
+    } catch (e) { if (seq === trendSeq) trendMeta.textContent = 'SST outlook unavailable — try again shortly.'; }
     return;
   }
   if (cfg.trend === 'none') { trendMeta.textContent = 'Trend not available for this layer — try chlorophyll, SST, or a Coral Reef Watch layer.'; return; }
